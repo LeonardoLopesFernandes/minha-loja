@@ -335,12 +335,21 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       ToastUtils.show(context, 'Dados de impressão não disponíveis');
       return;
     }
+    final modoEditavel =
+        _usarModeloEditavel || _usarComumEditavel || _usarVencimentos;
+    final modoVencimentos = _usarVencimentos;
+    final semOverlay = _usarComumEditavel;
+    final hideGerarPreview = _usarModeloEditavel || _usarComumEditavel;
     final result = await Navigator.pushNamed(context, '/modelo_editavel',
         arguments: {
           'items': lista,
           'size': _size,
           'mostrarCheckbox': true,
-          'modoVencimentos': _usarVencimentos,
+          'modoEditavel': modoEditavel,
+          'modoVencimentos': modoVencimentos,
+          'semOverlay': semOverlay,
+          'hideGerarPreview': hideGerarPreview,
+          'title': modoVencimentos ? 'PAPELETA DE VENCIMENTOS' : null,
         });
     if (!mounted) return;
     if (result == true) {

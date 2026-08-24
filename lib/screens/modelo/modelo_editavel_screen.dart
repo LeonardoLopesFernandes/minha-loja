@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:minhaloja/core/constants.dart';
 import 'package:minhaloja/core/session_manager.dart';
 import 'package:minhaloja/core/theme.dart';
@@ -12,7 +14,15 @@ import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:minhaloja/screens/modelo/composite_preview_screen.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+
+/// IP/porta da impressora (socket RAW, igual ao MLoja).
+const String _kPrinterIp = '10.25.168.24';
+const int _kPrinterPort = 9100;
 
 /// Espelha o fluxo multi-item da ModeloEditavelActivity do MLoja:
 /// lista todos os itens com checkboxes, seletor de tamanho,
@@ -38,6 +48,10 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   bool _hideGerarPreview = false;
 
   bool _sending = false;
+  bool _gerando = false;
+
+  /// Comum pura (não Vencimentos) → envio via API; demais → PDF via socket.
+  bool _enviarApi = false;
 
   List<_ItemCtrls> _ctrls = [];
 
@@ -76,6 +90,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     }
     _selected = List.filled(_items.length, true);
     _ctrls = _items.map((d) => _ItemCtrls(d)).toList();
+    _enviarApi = !_modoVencimentos && _items.every(_isComum);
   }
 
   @override
@@ -114,38 +129,131 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     return true;
   }
 
-  Future<void> _imprimir() async {
-    final toSend = <PapeletaPrintingData>[];
+  List<PapeletaPrintingData> _selecionados() {
+    final sel = <PapeletaPrintingData>[];
+    final val = <String>[];
     for (int i = 0; i < _items.length; i++) {
       if (!_mostrarCheckbox || _selected[i]) {
-        toSend.add(_currentData(i).copyWith(size: _size, quantity: 1));
+        sel.add(_currentData(i).copyWith(size: _size, quantity: 1));
+        val.add(_ctrls[i].validade.text);
       }
     }
+    _validadesSelecionadas = val;
+    return sel;
+  }
+
+  List<String> _validadesSelecionadas = [];
+
+  Future<void> _imprimir() async {
+    final toSend = _selecionados();
     if (toSend.isEmpty) {
       ToastUtils.show(context, 'Nenhum item selecionado');
       return;
     }
+    if (_enviarApi) {
+      // Comum pura → envio via API (fiel ao MLoja).
+      setState(() => _sending = true);
+      try {
+        await api.sendPriceSigns(
+          session.getUserStore(),
+          SendPriceSignRequest(products: toSend),
+        );
+        if (!mounted) return;
+        ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
+        Navigator.pop(context, true);
+      } on ApiException catch (e) {
+        if (e.statusCode == 401) {
+          SessionExpiredHandler.handleSessionExpired(context);
+        } else {
+          ToastUtils.showError(context, e.message);
+        }
+      } catch (e) {
+        ToastUtils.showError(context, 'Erro ao enviar papeletas');
+        LogHelper.e('ModeloEditavel: erro ao enviar', e);
+      } finally {
+        if (mounted) setState(() => _sending = false);
+      }
+    } else {
+      // Demais tipos (Promocional, Misto, Vencimentos) → gera PDF e envia
+      // via socket RAW, igual ao MLoja.
+      await _enviarViaSocket(toSend);
+    }
+  }
+
+  Future<void> _enviarViaSocket(List<PapeletaPrintingData> toSend) async {
     setState(() => _sending = true);
     try {
-      await api.sendPriceSigns(
-        session.getUserStore(),
-        SendPriceSignRequest(products: toSend),
+      final pages = await buildCompositePages(
+        api: api,
+        items: toSend,
+        size: _size,
+        modoVencimentos: _modoVencimentos,
+        validades: _validadesSelecionadas,
       );
+      final pdfBytes = await _gerarPdfBytes(pages);
+      final socket =
+          await Socket.connect(_kPrinterIp, _kPrinterPort, timeout: const Duration(seconds: 5));
+      socket.add(pdfBytes);
+      await socket.flush();
+      await socket.close();
       if (!mounted) return;
       ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
       Navigator.pop(context, true);
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-      } else {
-        ToastUtils.showError(context, e.message);
-      }
     } catch (e) {
-      ToastUtils.showError(context, 'Erro ao enviar papeletas');
-      LogHelper.e('ModeloEditavel: erro ao enviar', e);
+      if (!mounted) return;
+      ToastUtils.showError(context, 'Erro ao enviar via socket: ${e.toString()}');
+      LogHelper.e('ModeloEditavel: erro socket', e);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  Future<void> _compartilharPdf() async {
+    final toSend = _selecionados();
+    if (toSend.isEmpty) {
+      ToastUtils.show(context, 'Nenhum item selecionado');
+      return;
+    }
+    setState(() => _gerando = true);
+    try {
+      final pages = await buildCompositePages(
+        api: api,
+        items: toSend,
+        size: _size,
+        modoVencimentos: _modoVencimentos,
+        validades: _validadesSelecionadas,
+      );
+      final pdfBytes = await _gerarPdfBytes(pages);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/papeletas.pdf');
+      await file.writeAsBytes(pdfBytes);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/pdf')],
+        text: 'Papeletas',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showError(context, 'Erro ao compartilhar PDF');
+      LogHelper.e('ModeloEditavel: erro share', e);
+    } finally {
+      if (mounted) setState(() => _gerando = false);
+    }
+  }
+
+  Future<Uint8List> _gerarPdfBytes(List<Uint8List> pages) async {
+    final doc = pw.Document();
+    for (final png in pages) {
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(14),
+          build: (context) => pw.Center(
+            child: pw.Image(pw.MemoryImage(png), fit: pw.BoxFit.contain),
+          ),
+        ),
+      );
+    }
+    return await doc.save();
   }
 
   void _abrirPreviewItem(int i) {
@@ -160,9 +268,11 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
 
   void _abrirPreviewTodos() {
     final sel = <PapeletaPrintingData>[];
+    final valList = <String>[];
     for (int i = 0; i < _items.length; i++) {
       if (!_mostrarCheckbox || _selected[i]) {
         sel.add(_currentData(i).copyWith(size: _size));
+        valList.add(_ctrls[i].validade.text);
       }
     }
     if (sel.isEmpty) {
@@ -172,7 +282,12 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CompositePreviewScreen(items: sel, size: _size),
+        builder: (_) => CompositePreviewScreen(
+          items: sel,
+          size: _size,
+          modoVencimentos: _modoVencimentos,
+          validades: valList,
+        ),
       ),
     );
   }
@@ -329,8 +444,10 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
             child: TextField(
               controller: c.validade,
               keyboardType: TextInputType.number,
+              inputFormatters: [_ValidadeMask()],
               decoration: InputDecoration(
                 labelText: 'Validade (DD/MM/AAAA)',
+                hintText: 'Ex: 10/08/2026',
                 isDense: true,
                 filled: true,
                 fillColor: Colors.white,
@@ -441,6 +558,19 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.green,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _gerando ? null : _compartilharPdf,
+                  icon: const Icon(Icons.share),
+                  label: Text(_gerando ? 'GERANDO...' : 'COMPARTILHAR PDF'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
@@ -590,5 +720,23 @@ class _PreviewPageState extends State<_PreviewPage> {
       );
     }
     return WebViewWidget(controller: _controller);
+  }
+}
+
+/// Máscara de validade DD/MM/AAAA (igual ao comportamento do MLoja).
+class _ValidadeMask extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final buf = StringBuffer();
+    for (int i = 0; i < digits.length && i < 8; i++) {
+      if (i == 2 || i == 4) buf.write('/');
+      buf.write(digits[i]);
+    }
+    return TextEditingValue(
+      text: buf.toString(),
+      selection: TextSelection.collapsed(offset: buf.length),
+    );
   }
 }

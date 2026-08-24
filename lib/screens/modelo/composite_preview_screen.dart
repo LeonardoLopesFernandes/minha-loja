@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -9,7 +10,6 @@ import 'package:minhaloja/models/models.dart';
 import 'package:minhaloja/network/api_client.dart';
 import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/log_helper.dart';
-import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:pdf_render/pdf_render.dart';
 
 /// Pré-visualização composta (grade) espelhando a ModeloEditavelActivity do
@@ -18,8 +18,15 @@ import 'package:pdf_render/pdf_render.dart';
 class CompositePreviewScreen extends StatefulWidget {
   final List<PapeletaPrintingData> items;
   final String size;
-  const CompositePreviewScreen(
-      {super.key, required this.items, required this.size});
+  final bool modoVencimentos;
+  final List<String> validades;
+  const CompositePreviewScreen({
+    super.key,
+    required this.items,
+    required this.size,
+    this.modoVencimentos = false,
+    this.validades = const [],
+  });
 
   @override
   State<CompositePreviewScreen> createState() => _CompositePreviewScreenState();
@@ -27,7 +34,6 @@ class CompositePreviewScreen extends StatefulWidget {
 
 class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
   final ApiService api = ApiService(ApiClient.instance.getSlApiService());
-
   int _cols = 2;
   int _rows = 2;
   int _page = 0;
@@ -38,7 +44,6 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
   @override
   void initState() {
     super.initState();
-    _configureGrid();
     _generate();
   }
 
@@ -64,83 +69,18 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
     }
   }
 
-  bool _ehComum(PapeletaPrintingData d) {
-    if (d.template == Constants.signTemplateDeporParcelado) return true;
-    final hasPromo = d.promotionPrice != null && d.promotionPrice! > 0;
-    final hasTW = d.takeAndWinQuantity != null && d.takeAndWinQuantity! > 0;
-    if (hasPromo || hasTW) return false;
-    return true;
-  }
-
-  Future<img.Image?> _rasterize(PapeletaPrintingData data, int w, int h) async {
-    // O Kotlin sempre gera o PDF de cada célula em 1X1 e compõe a grade
-    // conforme o tamanho selecionado (ex.: 3x2 para 6X1, já que a API não
-    // possui 6X1).
-    final bytes = await api.previewPriceSign(
-        data.copyWith(size: Constants.signSize1x1));
-    final doc = await PdfDocument.openData(bytes);
-    try {
-      if (doc.pageCount < 1) return null;
-      final page = await doc.loadPage(1);
-      try {
-        final pi = await page.render(width: w, height: h);
-        final png = pi.bytes;
-        return img.decodeImage(png);
-      } finally {
-        page.dispose();
-      }
-    } finally {
-      doc.dispose();
-    }
-  }
-
   Future<void> _generate() async {
     try {
-      final overlayData = await rootBundle
-          .load('assets/overlays/${widget.size.toLowerCase()}.png');
-      final overlay = img.decodeImage(overlayData.buffer.asUint8List());
-      if (overlay == null) throw Exception('Overlay não encontrado');
-
-      final gridCap = _cols * _rows;
-      final total = widget.items.length;
-      final pageCount = total == 0 ? 1 : (total / gridCap).ceil();
-      final out = <Uint8List>[];
-
-      for (int p = 0; p < pageCount; p++) {
-        final base = img.Image(width: overlay.width, height: overlay.height);
-        base.drawImage(overlay);
-        final halfW = (overlay.width / _cols).floor();
-        final halfH = (overlay.height / _rows).floor();
-
-        for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
-          final item = widget.items[idx];
-          final local = idx % gridCap;
-          final col = local % _cols;
-          final row = local ~/ _cols;
-          final left = col * halfW;
-          final top = row * halfH;
-
-          try {
-            final raster = await _rasterize(item, halfW * 2, halfH * 2);
-            if (raster != null) {
-              final resized = img.copyResize(raster, width: halfW, height: halfH);
-              if (_ehComum(item)) {
-                img.fillRect(base,
-                    x1: left, y1: top, x2: left + halfW, y2: top + halfH,
-                    color: img.ColorRgba8(255, 255, 255, 255));
-              }
-              img.compositeImage(base, resized, dstX: left, dstY: top);
-            }
-          } catch (e) {
-            LogHelper.e('Composite: erro item $idx', e);
-          }
-        }
-        out.add(img.encodePng(base));
-      }
-
+      _configureGrid();
+      _pages = await buildCompositePages(
+        api: api,
+        items: widget.items,
+        size: widget.size,
+        modoVencimentos: widget.modoVencimentos,
+        validades: widget.validades,
+      );
       if (!mounted) return;
       setState(() {
-        _pages = out;
         _loading = false;
       });
     } catch (e) {
@@ -196,4 +136,179 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
       ),
     );
   }
+}
+
+bool _ehComum(PapeletaPrintingData d) {
+  if (d.template == Constants.signTemplateDeporParcelado) return true;
+  final hasPromo = d.promotionPrice != null && d.promotionPrice! > 0;
+  final hasTW = d.takeAndWinQuantity != null && d.takeAndWinQuantity! > 0;
+  if (hasPromo || hasTW) return false;
+  return true;
+}
+
+/// Gera as páginas compostas (grade sobre overlay) como imagens, fiel ao
+/// gerarPreviewMulti / gerarPreviewVencimentos do Kotlin.
+Future<List<Uint8List>> buildCompositePages({
+  required ApiService api,
+  required List<PapeletaPrintingData> items,
+  required String size,
+  required bool modoVencimentos,
+  required List<String> validades,
+}) async {
+  int cols = 2;
+  int rows = 2;
+  switch (size.toUpperCase()) {
+    case '1X1':
+      cols = 1;
+      rows = 1;
+      break;
+    case '2X1':
+      cols = 2;
+      rows = 1;
+      break;
+    case '6X1':
+      cols = 3;
+      rows = 2;
+      break;
+    case '4X1':
+    default:
+      cols = 2;
+      rows = 2;
+      break;
+  }
+
+  final overlayData =
+      await rootBundle.load('assets/overlays/${size.toLowerCase()}.png');
+  final overlay = img.decodeImage(overlayData.buffer.asUint8List());
+
+  final gridCap = cols * rows;
+  final total = items.length;
+  final pageCount = total == 0 ? 1 : (total / gridCap).ceil();
+  final out = <Uint8List>[];
+
+  for (int p = 0; p < pageCount; p++) {
+    final ovW = overlay?.width ?? 850;
+    final ovH = overlay?.height ?? 1200;
+    final base = img.Image(width: ovW, height: ovH);
+    if (overlay != null) {
+      base.drawImage(overlay);
+    } else {
+      img.fill(base, color: img.ColorRgba8(255, 255, 255, 255));
+    }
+    final halfW = (ovW / cols).floor();
+    final halfH = (ovH / rows).floor();
+
+    for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
+      final item = items[idx];
+      final local = idx % gridCap;
+      final col = local % cols;
+      final row = local ~/ cols;
+      final left = col * halfW;
+      final top = row * halfH;
+      final validade = validades.length > idx ? validades[idx] : null;
+      try {
+        final raster = await _rasterizeCard(
+            api, item, halfW, halfH, validade, modoVencimentos);
+        if (raster != null) {
+          if (_ehComum(item) && overlay != null) {
+            img.fillRect(base,
+                x1: left,
+                y1: top,
+                x2: left + halfW,
+                y2: top + halfH,
+                color: img.ColorRgba8(255, 255, 255, 255));
+          }
+          img.compositeImage(base, raster, dstX: left, dstY: top);
+        }
+      } catch (e) {
+        LogHelper.e('Composite: erro item $idx', e);
+      }
+    }
+    out.add(img.encodePng(base));
+  }
+  return out;
+}
+
+Future<img.Image?> _rasterizeCard(ApiService api, PapeletaPrintingData data,
+    int w, int h, String? validade, bool modoVencimentos) async {
+  // O Kotlin sempre gera o PDF de cada célula em 1X1 e compõe a grade
+  // conforme o tamanho selecionado (ex.: 3x2 para 6X1, já que a API não
+  // possui 6X1).
+  final bytes =
+      await api.previewPriceSign(data.copyWith(size: Constants.signSize1x1));
+  final doc = await PdfDocument.openData(bytes);
+  try {
+    if (doc.pageCount < 1) return null;
+    final page = await doc.loadPage(1);
+    try {
+      final pi = await page.render(width: w, height: h);
+      final png = pi.bytes;
+      final raster = img.decodeImage(png);
+      if (raster == null) return null;
+      if (modoVencimentos &&
+          validade != null &&
+          validade.trim().isNotEmpty) {
+        return await _drawVencimento(raster, validade.trim(), w, h);
+      }
+      return raster;
+    } finally {
+      page.dispose();
+    }
+  } finally {
+    doc.dispose();
+  }
+}
+
+/// Desenha "VAL.: <data>" e o rodapé fixo "PRÓXIMO DA VALIDADE. CONSUMO
+/// RÁPIDO" sobre a papeleta, espelhando o desenharValidadeCard do Kotlin.
+Future<img.Image> _drawVencimento(
+    img.Image raster, String validade, int w, int h) async {
+  final uiImg = await decodeImageFromList(img.encodePng(raster));
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(
+      recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));
+  canvas.drawColor(const ui.Color(0xFFFFFFFF), ui.BlendMode.srcOver);
+  canvas.drawImageRect(
+    uiImg,
+    Rect.fromLTWH(0, 0, uiImg.width.toDouble(), uiImg.height.toDouble()),
+    Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+    ui.Paint(),
+  );
+  final valText = 'VAL.: ${_formatValidade(validade)}'.toUpperCase();
+  _drawCentered(canvas, w, h * 0.34, valText,
+      fontSize: (w * 0.05).clamp(14, 48).toDouble(), bold: true);
+  _drawCentered(canvas, w, h * 0.93, 'PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO',
+      fontSize: (w * 0.028).clamp(8, 26).toDouble(), bold: true);
+  final picture = recorder.endRecording();
+  final out = await picture.toImage(w, h);
+  final pngOut = (await out.toByteData(format: ui.ImageByteFormat.png))!
+      .buffer
+      .asUint8List();
+  uiImg.dispose();
+  return img.decodeImage(pngOut)!;
+}
+
+void _drawCentered(ui.Canvas canvas, int w, double y, String text,
+    {required double fontSize, required bool bold}) {
+  final tp = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        color: const ui.Color(0xFFD32F2F),
+        fontSize: fontSize,
+        fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+      ),
+    ),
+    textAlign: TextAlign.center,
+    textDirection: TextDirection.ltr,
+  )..layout(minWidth: 0, maxWidth: w.toDouble());
+  tp.paint(canvas, Offset((w - tp.width) / 2, y - tp.height / 2));
+}
+
+String _formatValidade(String v) {
+  final digits = v.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.length == 8) {
+    return '${digits.substring(0, 2)}/${digits.substring(2, 4)}/${digits.substring(4)}';
+  }
+  return v;
 }
