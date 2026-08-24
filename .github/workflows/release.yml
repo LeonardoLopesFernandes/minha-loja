@@ -33,8 +33,8 @@ jobs:
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses || true
 
-      - name: Build APK
-        run: flutter build apk --release --dart-define=CLIENT_SECRET=${{ secrets.CLIENT_SECRET }}
+      - name: Build APK (arm64-v8a only)
+        run: flutter build apk --release --target-platform=android-arm64 --dart-define=CLIENT_SECRET=${{ secrets.CLIENT_SECRET }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
