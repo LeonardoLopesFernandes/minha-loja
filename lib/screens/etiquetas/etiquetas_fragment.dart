@@ -71,22 +71,20 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
 
   List<PriceTag> _tags = [];
 
-  String _status = Constants.statusAll;
-
   bool _loading = false;
-  bool _loadingTags = false;
 
   final TextEditingController _eanController = TextEditingController();
   String _buscaTipo = 'EAN';
   String _eanHint = 'Digite o EAN';
   TextInputType _eanKeyboardType = TextInputType.number;
+  String _printer = 'Zebra 1';
 
   @override
   void initState() {
     super.initState();
     _storeId = SessionManager.instance?.getUserStore() ?? Constants.defaultStore;
     _today = _formatToday();
-    _loadInitial();
+    _loadSaved();
   }
 
   @override
@@ -95,45 +93,14 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
     super.dispose();
   }
 
-  Future<void> _loadInitial() async {
+  Future<void> _loadSaved() async {
     setState(() => _loading = true);
     try {
-      _tags = await ListaStore.instance.getEtiquetas();
-      await _fetchServerTags();
+      _tags = List<PriceTag>.from(await ListaStore.instance.getEtiquetas());
     } catch (e) {
       LogHelper.e('EtiquetasFragment: erro ao carregar', e);
     } finally {
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _fetchServerTags() async {
-    if (!mounted) return;
-    setState(() => _loadingTags = true);
-    try {
-      final resp = await api.getPriceTagsByStatus(
-        _storeId,
-        _status,
-        startDate: _today,
-      );
-      final map = <String, PriceTag>{for (final t in _tags) t.id: t};
-      for (final st in resp.priceTags) {
-        if (!map.containsKey(st.id)) {
-          _tags.add(st);
-          map[st.id] = st;
-        }
-      }
-      await ListaStore.instance.saveEtiquetas(_tags);
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-        return;
-      }
-      if (mounted) ToastUtils.showError(context, e.message);
-    } catch (e) {
-      LogHelper.e('EtiquetasFragment: erro ao buscar etiquetas', e);
-    } finally {
-      if (mounted) setState(() => _loadingTags = false);
     }
   }
 
@@ -149,13 +116,14 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
   Future<void> _addByScan() async {
     final result = await Navigator.pushNamed(context, '/barcode');
     if (result is String && result.isNotEmpty) {
+      _eanController.text = result;
       await _fetchAndAdd(result);
     }
   }
 
-  Future<void> _fetchAndAdd(String ean) async {
-    final code = ean.trim();
-    if (code.isEmpty) {
+  Future<void> _fetchAndAdd(String code) async {
+    final c = code.trim();
+    if (c.isEmpty) {
       ToastUtils.show(context, 'Digite um código');
       return;
     }
@@ -163,17 +131,32 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
     try {
       final resp = await api.getSingleLabelByEan(
         _storeId,
-        ean: code,
+        ean: _buscaTipo == 'EAN' ? c : null,
+        sapId: _buscaTipo == 'SAP' ? c : null,
+        description: _buscaTipo == 'Descrição' ? c : null,
         startDate: _today,
       );
+      if (!mounted) return;
       if (resp.items.isEmpty) {
         ToastUtils.showInfo(context, 'Nenhuma etiqueta encontrada');
+        setState(() => _loading = false);
         return;
       }
-      final item = resp.items.first;
-      await ListaStore.instance.addEtiqueta(_singleToPriceTag(item));
-      _tags = await ListaStore.instance.getEtiquetas();
-      ToastUtils.showSuccess(context, 'Etiqueta adicionada');
+      int added = 0;
+      int incremented = 0;
+      for (final item in resp.items) {
+        final idx = _tags.indexWhere((t) => t.ean == item.ean);
+        if (idx >= 0) {
+          _tags[idx].quantity += 1;
+          incremented++;
+        } else {
+          _tags.add(_singleToPriceTag(item));
+          added++;
+        }
+      }
+      await _persist();
+      ToastUtils.showSuccess(
+          context, '$added adicionado(s) | $incremented incrementado(s)');
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
@@ -194,29 +177,39 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       ToastUtils.show(context, 'Selecione ao menos um item');
       return;
     }
+    final printingDataList = <PrintingData>[];
+    for (final t in selected) {
+      final pd = t.printingData;
+      if (pd == null) continue;
+      final template = pd.takeAndWin != null
+          ? Constants.signTemplateModelo
+          : Constants.templateNormalizado(pd.template);
+      for (int i = 0; i < t.quantity; i++) {
+        printingDataList
+            .add(pd.copyWith(quantity: 1, template: template));
+      }
+    }
+    if (printingDataList.isEmpty) {
+      ToastUtils.show(context, 'Dados de impressão não disponíveis');
+      return;
+    }
+    final printerId = _printer == 'Zebra 1'
+        ? Constants.printerZebra1
+        : Constants.printerZebra2;
     setState(() => _loading = true);
     try {
-      final resp = await api.getPrinters(_storeId);
-      if (!mounted) return;
-      final choice = await _showPrinterDialog(resp);
-      if (choice == null) {
-        setState(() => _loading = false);
-        return;
-      }
       await api.sendPriceTagsToPrinter(
         _storeId,
-        choice.printerId,
-        choice.tagId,
-        SendPriceTagsRequest(
-          products: selected
-              .map((e) => e.printingData)
-              .whereType<PrintingData>()
-              .toList(),
-        ),
+        printerId,
+        Constants.tagGondola,
+        SendPriceTagsRequest(products: printingDataList),
       );
-      for (final e in selected) {
-        e.checkbox = false;
-      }
+      if (!mounted) return;
+      setState(() {
+        for (final t in selected) {
+          _tags.removeWhere((e) => e.id == t.id);
+        }
+      });
       await _persist();
       ToastUtils.showSuccess(context, 'Enviado para impressão');
     } on ApiException catch (e) {
@@ -262,9 +255,11 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
         content: const Text('Tem certeza que deseja remover todos os itens?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Não')),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sim')),
         ],
       ),
     );
@@ -273,52 +268,6 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       await _persist();
       ToastUtils.show(context, 'Lista limpa');
     }
-  }
-
-  Future<_PrinterChoice?> _showPrinterDialog(PrinterResponse resp) async {
-    return showDialog<_PrinterChoice>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Selecione a impressora e etiqueta'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: resp.printers.length,
-            itemBuilder: (_, pi) {
-              final p = resp.printers[pi];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(p.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  ...p.tags.map(
-                    (t) => ListTile(
-                      dense: true,
-                      title: Text(t.name),
-                      subtitle: Text(t.orientation),
-                      onTap: () => Navigator.pop(
-                        ctx,
-                        _PrinterChoice(printerId: p.id, tagId: t.id),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _spinnerBox({
@@ -356,9 +305,12 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
             children: [
               Expanded(
                 child: _spinnerBox(
-                  value: 'Zebra 1',
+                  value: _printer,
                   items: const ['Zebra 1', 'Zebra 2'],
-                  onChanged: (_) {},
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _printer = v);
+                  },
                 ),
               ),
               const SizedBox(width: 4),
@@ -406,6 +358,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 16),
                     ),
+                    onSubmitted: (v) => _fetchAndAdd(v),
                   ),
                 ),
                 Container(
@@ -516,7 +469,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
           children: [
             _buildFilterBar(),
             Expanded(
-              child: _loadingTags && _tags.isEmpty
+              child: _loading && _tags.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : _tags.isEmpty
                       ? _emptyState()
@@ -574,10 +527,4 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       ],
     );
   }
-}
-
-class _PrinterChoice {
-  final String printerId;
-  final String tagId;
-  _PrinterChoice({required this.printerId, required this.tagId});
 }

@@ -28,14 +28,10 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
   bool _loading = false;
   List<PriceSign> _items = [];
 
-  List<SupplyType> _supplyTypes = [];
-  List<String> _sizes = [];
-
-  String _type = Constants.tipoComum;
-  String _modelo = 'Misto';
-  String _buscaTipo = 'EAN';
-  String? _size;
-  String _status = Constants.statusAll;
+  String _tipo = 'Promocional'; // Comum / Promocional (default Promocional)
+  String _modelo = 'Misto'; // Misto / Promocional / Promocional Editável / Comum / Comum Editável / Vencimentos
+  String _buscaTipo = 'EAN'; // EAN / SAP / Descrição
+  String _size = '4×1'; // 1×1 / 2×1 / 4×1 / 6×1
 
   final TextEditingController _eanController = TextEditingController();
   String _eanHint = 'Digite o EAN';
@@ -46,8 +42,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     super.initState();
     _store = _session.getUserStore();
     _startDate = _today();
-    _loadFilters();
-    _loadSavedAndSigns();
+    _loadSaved();
   }
 
   @override
@@ -64,65 +59,13 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     return '$y-$m-$d';
   }
 
-  Future<void> _loadFilters() async {
-    try {
-      final resp = await _api.getPriceSignFilters(_store);
-      if (!mounted) return;
-      setState(() {
-        _supplyTypes = resp.supplyTypes;
-        _sizes = resp.size;
-        if (_size == null && _sizes.isNotEmpty) _size = _sizes[2];
-      });
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-        return;
-      }
-      LogHelper.e('Erro ao carregar filtros de papeletas', e);
-    } catch (e) {
-      LogHelper.e('Erro ao carregar filtros de papeletas', e);
-    }
-  }
-
-  Future<void> _loadSavedAndSigns() async {
-    final saved = await ListaStore.instance.getPapeletas();
-    if (!mounted) return;
-    setState(() => _items = List<PriceSign>.from(saved));
-    await _loadSigns();
-  }
-
-  Future<void> _loadSigns() async {
-    if (!mounted) return;
+  Future<void> _loadSaved() async {
     setState(() => _loading = true);
     try {
-      final resp = await _api.getPriceSigns(
-        _store,
-        _type,
-        department: null,
-        size: _size,
-        status: _status,
-        startDate: _startDate,
-      );
-      if (!mounted) return;
-      final merged = List<PriceSign>.from(resp.priceSigns);
-      for (final s in _items) {
-        if (!merged.any((e) => e.id == s.id)) merged.add(s);
-      }
-      setState(() {
-        _items = merged;
-        _loading = false;
-      });
-      await _persist();
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-        return;
-      }
-      LogHelper.e('Erro ao carregar papeletas', e);
-      if (mounted) setState(() => _loading = false);
-      ToastUtils.showError(context, 'Erro ao carregar papeletas');
+      _items = List<PriceSign>.from(await ListaStore.instance.getPapeletas());
     } catch (e) {
       LogHelper.e('Erro ao carregar papeletas', e);
+    } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -131,91 +74,177 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     await ListaStore.instance.savePapeletas(_items);
   }
 
+  void _delete(PriceSign item) {
+    setState(() => _items.removeWhere((e) => e.id == item.id));
+    ListaStore.instance.removePapeleta(item);
+  }
+
+  // ---- Helpers (espelho do Kotlin) ----
+  bool get _usarMisto => _modelo == 'Misto';
+  bool get _usarModeloEditavel =>
+      _modelo == 'Promocional' || _modelo == 'Promocional Editável';
+  bool get _usarComumEditavel =>
+      _modelo == 'Comum' || _modelo == 'Comum Editável';
+  bool get _usarVencimentos => _modelo == 'Vencimentos';
+  bool get _isModoEditavel =>
+      _modelo == 'Promocional Editável' || _modelo == 'Comum Editável';
+
+  static int _maxItens(String size) {
+    switch (size) {
+      case '1×1':
+        return 1;
+      case '2×1':
+        return 2;
+      case '4×1':
+        return 4;
+      default:
+        return 6;
+    }
+  }
+
+  static String _templatePorMovimento(String? movement) {
+    final m = (movement ?? '').toLowerCase();
+    if (m == 'de/por') return Constants.signTemplateDepor;
+    if (m == 'parcelado') return Constants.signTemplateDeporParcelado;
+    return Constants.signTemplateModeloEditavel;
+  }
+
+  PapeletaPrintingData _ajustarDadosLeveGanhe(PapeletaPrintingData d) {
+    if (d.template != Constants.signTemplateLeveGanheCada) return d;
+    final total = Constants.totalLeveGanhe(
+        d.promotionPrice, d.takeAndWinPrice, d.takeAndWinQuantity);
+    final qty = d.takeAndWinQuantity ?? 0;
+    final unitario = (d.takeAndWinPrice != null && d.takeAndWinPrice! > 0)
+        ? d.takeAndWinPrice!
+        : (qty > 0 ? total / qty : total);
+    return d.copyWith(
+      template: Constants.signTemplateLeveGanheTotal,
+      promotionPrice: unitario,
+      takeAndWinPrice: total,
+      installmentPrice: null,
+      installmentQuantity: null,
+    );
+  }
+
+  bool _isItemComum(PriceSign item) {
+    final d = item.printingData;
+    if (d == null) return true;
+    if (d.template == 'por_de_parcelado' ||
+        d.template == Constants.signTemplateDeporParcelado) return true;
+    final hasPromo = d.promotionPrice != null && d.promotionPrice! > 0;
+    final hasTW = d.takeAndWinQuantity != null && d.takeAndWinQuantity! > 0;
+    if (hasPromo || hasTW) return false;
+    return true;
+  }
+
+  bool _isComumElegivel(PriceSign item) {
+    final d = item.printingData;
+    if (d == null) return true;
+    final hasInst =
+        d.installmentQuantity != null && d.installmentQuantity! > 0;
+    final hasPromo = d.promotionPrice != null && d.promotionPrice! > 0;
+    final hasTW = d.takeAndWinQuantity != null && d.takeAndWinQuantity! > 0;
+    if (hasInst && !hasPromo && !hasTW) return (d.price) > 149.99;
+    return true;
+  }
+
+  // ---- Busca avulsa (ambos os tipos, comportamento "Misto") ----
   Future<void> _addStandalone() async {
-    final ean = _eanController.text.trim();
-    if (ean.isEmpty) {
+    final c = _eanController.text.trim();
+    if (c.isEmpty) {
       ToastUtils.show(context, 'Informe um código');
       return;
     }
     setState(() => _loading = true);
     try {
-      final resp = await _api.getPriceSignStandalone(
-        _store,
-        _type,
-        ean: _buscaTipo == 'EAN' ? ean : null,
-        sapId: _buscaTipo == 'SAP' ? ean : null,
-        description: _buscaTipo == 'Descrição do item' ? ean : null,
-        startDate: _startDate,
-      );
+      final results = await Future.wait([
+        _api.getPriceSignStandalone(_store, Constants.tipoComum,
+            ean: _buscaTipo == 'EAN' ? c : null,
+            sapId: _buscaTipo == 'SAP' ? c : null,
+            description: _buscaTipo == 'Descrição' ? c : null,
+            startDate: _startDate),
+        _api.getPriceSignStandalone(_store, Constants.tipoPromocional,
+            ean: _buscaTipo == 'EAN' ? c : null,
+            sapId: _buscaTipo == 'SAP' ? c : null,
+            description: _buscaTipo == 'Descrição' ? c : null,
+            startDate: _startDate),
+      ]);
+      int added = 0;
+      for (final r in results) {
+        for (final it in r.items) {
+          if (!_items.any((e) => e.id == it.id)) {
+            _items.add(it);
+            added++;
+          }
+        }
+      }
       if (!mounted) return;
-      final newItems = resp.items
-          .where((e) => !_items.any((i) => i.id == e.id))
-          .toList();
-      setState(() {
-        _items.addAll(newItems);
-        _loading = false;
-      });
+      if (added == 0) {
+        ToastUtils.showInfo(context, 'Nenhuma papeleta encontrada');
+      } else {
+        ToastUtils.showSuccess(context, '$added papeleta(s) adicionada(s)');
+      }
       await _persist();
-      ToastUtils.showSuccess(
-          context, '${newItems.length} papeleta(s) adicionada(s)');
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
         return;
       }
+      ToastUtils.showError(context, e.message);
+    } catch (e) {
       LogHelper.e('Erro ao buscar papeleta', e);
-      if (mounted) setState(() => _loading = false);
       ToastUtils.showError(context, 'Erro ao buscar papeleta');
-    } catch (e) {
-      LogHelper.e('Erro ao buscar papeleta', e);
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _delete(PriceSign item) async {
-    setState(() => _items.removeWhere((e) => e.id == item.id));
-    await ListaStore.instance.removePapeleta(item);
-  }
-
-  void _editModelo(PriceSign item) {
-    Navigator.pushNamed(context, '/modelo_editavel', arguments: item);
-  }
-
-  Future<void> _send() async {
-    final selected = _items
-        .where((e) => e.checkbox)
-        .map((e) => e.printingData)
-        .whereType<PapeletaPrintingData>()
-        .toList();
-    if (selected.isEmpty) {
-      ToastUtils.show(context, 'Selecione ao menos uma papeleta');
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await _api.sendPriceSigns(
-        _store,
-        SendPriceSignRequest(products: selected),
-      );
-      if (!mounted) return;
-      ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-        return;
-      }
-      LogHelper.e('Erro ao enviar papeletas', e);
-      ToastUtils.showError(context, 'Erro ao enviar papeletas');
-    } catch (e) {
-      LogHelper.e('Erro ao enviar papeletas', e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _imprimirItem(PriceSign item) async {
-    setState(() => item.checkbox = true);
-    await _send();
+  Future<void> _addByScan() async {
+    final r = await Navigator.pushNamed(context, '/barcode');
+    if (r is String && r.isNotEmpty) {
+      _eanController.text = r;
+      await _addStandalone();
+    }
+  }
+
+  // ---- Impressão ----
+  Future<void> _imprimirItem(PriceSign item, int qty) async {
+    final signData = item.printingData;
+    if (signData == null) {
+      ToastUtils.show(context, 'Dados de impressão não disponíveis');
+      return;
+    }
+    final tamanhoAtual = _size;
+
+    if (_usarComumEditavel && !_isModoEditavel) {
+      if (!_isItemComum(item)) {
+        ToastUtils.show(context, 'Esta papeleta não é do tipo Comum');
+        return;
+      }
+      final list = List.generate(
+          qty,
+          (_) => _ajustarDadosLeveGanhe(
+              signData.copy(quantity: 1, size: tamanhoAtual)));
+      await _send(list);
+      setState(() => _items.removeWhere((e) => e.id == item.id));
+      await _persist();
+      return;
+    }
+
+    if (_usarModeloEditavel && _isItemComum(item)) {
+      ToastUtils.show(context, 'Esta papeleta é do tipo Comum, selecione o modo Comum');
+      return;
+    }
+
+    final qtd = qty < _maxItens(tamanhoAtual) ? qtd : _maxItens(tamanhoAtual);
+    final lista = List.generate(
+        qtd,
+        (_) => _ajustarDadosLeveGanhe(signData.copy(
+              template: signData.template ?? _templatePorMovimento(item.movement),
+              quantity: 1,
+              size: tamanhoAtual,
+            )));
+    await _openPreview(lista, itemToRemove: item);
   }
 
   Future<void> _imprimirTodas() async {
@@ -223,11 +252,80 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       ToastUtils.show(context, 'Nenhuma papeleta para imprimir');
       return;
     }
-    for (final t in _items) {
-      t.checkbox = true;
+    final tamanhoAtual = _size;
+    final lista = <PapeletaPrintingData>[];
+    for (final item in _items) {
+      final ehComum = _isItemComum(item);
+      if (!_usarMisto) {
+        if (_tipo == 'Comum' && (!ehComum || !_isComumElegivel(item))) continue;
+        if (_tipo == 'Promocional' && ehComum) continue;
+      }
+      final signData = item.printingData;
+      if (signData == null) continue;
+      final qtd = item.quantity;
+      for (int i = 0; i < qtd; i++) {
+        lista.add(_ajustarDadosLeveGanhe(signData.copy(
+          template: signData.template ?? _templatePorMovimento(item.movement),
+          quantity: 1,
+          size: tamanhoAtual,
+        )));
+      }
     }
-    setState(() {});
-    await _send();
+    if (lista.isEmpty) {
+      ToastUtils.show(context,
+          _tipo == 'Comum' ? 'Nenhum item do tipo Comum' : 'Nenhum item do tipo Promocional');
+      return;
+    }
+
+    if (_usarComumEditavel && !_isModoEditavel) {
+      await _send(lista);
+      setState(() => _items.clear());
+      await _persist();
+      return;
+    }
+    await _openPreview(lista, clearAll: true);
+  }
+
+  Future<void> _send(List<PapeletaPrintingData> lista) async {
+    setState(() => _loading = true);
+    try {
+      await _api.sendPriceSigns(
+          _store, SendPriceSignRequest(products: lista));
+      if (!mounted) return;
+      ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        SessionExpiredHandler.handleSessionExpired(context);
+        return;
+      }
+      ToastUtils.showError(context, e.message);
+    } catch (e) {
+      LogHelper.e('Erro ao enviar papeletas', e);
+      ToastUtils.showError(context, 'Erro ao enviar papeletas');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Abre a visualização de preview (equivalente à ModeloEditavelActivity do Kotlin)
+  // e, ao voltar, efetua o envio para a impressora.
+  Future<void> _openPreview(List<PapeletaPrintingData> lista,
+      {PriceSign? itemToRemove, bool clearAll = false}) async {
+    final target = lista.isNotEmpty ? lista.first : null;
+    if (target == null) {
+      ToastUtils.show(context, 'Dados de impressão não disponíveis');
+      return;
+    }
+    await Navigator.pushNamed(context, '/pdf_viewer',
+        arguments: {'printingData': target});
+    if (!mounted) return;
+    await _send(lista);
+    if (clearAll) {
+      setState(() => _items.clear());
+    } else if (itemToRemove != null) {
+      setState(() => _items.removeWhere((e) => e.id == itemToRemove.id));
+    }
+    await _persist();
   }
 
   Future<void> _limparLista() async {
@@ -242,9 +340,11 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
         content: const Text('Tem certeza que deseja remover todos os itens?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Não')),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sim')),
         ],
       ),
     );
@@ -290,14 +390,11 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
             children: [
               Expanded(
                 child: _spinnerBox(
-                  value: _type == Constants.tipoComum ? 'Comum' : 'Promocional',
+                  value: _tipo,
                   items: const ['Comum', 'Promocional'],
                   onChanged: (v) {
                     if (v == null) return;
-                    setState(() => _type = v == 'Comum'
-                        ? Constants.tipoComum
-                        : Constants.tipoPromocional);
-                    _loadSigns();
+                    setState(() => _tipo = v);
                   },
                 ),
               ),
@@ -315,7 +412,11 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                   ],
                   onChanged: (v) {
                     if (v == null) return;
-                    setState(() => _modelo = v);
+                    setState(() {
+                      _modelo = v;
+                      if (v == 'Promocional Editável') _tipo = 'Promocional';
+                      if (v == 'Comum Editável') _tipo = 'Comum';
+                    });
                   },
                 ),
               ),
@@ -329,7 +430,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
               Expanded(
                 child: _spinnerBox(
                   value: _buscaTipo,
-                  items: const ['EAN', 'SAP', 'Descrição do item'],
+                  items: const ['EAN', 'SAP', 'Descrição'],
                   onChanged: (v) {
                     if (v == null) return;
                     setState(() {
@@ -339,9 +440,8 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                           : v == 'SAP'
                               ? 'Digite o SAP'
                               : 'Buscar Por Descrição';
-                      _eanKeyboardType = v == 'Descrição do item'
-                          ? TextInputType.text
-                          : TextInputType.number;
+                      _eanKeyboardType =
+                          v == 'Descrição' ? TextInputType.text : TextInputType.number;
                     });
                   },
                 ),
@@ -349,14 +449,11 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
               const SizedBox(width: 4),
               Expanded(
                 child: _spinnerBox(
-                  value: _size ?? (_sizes.isNotEmpty ? _sizes[2] : '4×1'),
-                  items: (_sizes.isNotEmpty ? _sizes : ['1×1', '2×1', '4×1', '6×1'])
-                      .map((e) => e)
-                      .toList(),
+                  value: _size,
+                  items: const ['1×1', '2×1', '4×1', '6×1'],
                   onChanged: (v) {
                     if (v == null) return;
                     setState(() => _size = v);
-                    _loadSigns();
                   },
                 ),
               ),
@@ -384,6 +481,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                       contentPadding:
                           const EdgeInsets.symmetric(horizontal: 16),
                     ),
+                    onSubmitted: (v) => _addStandalone(),
                   ),
                 ),
                 Container(
@@ -489,10 +587,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                               onDismissed: (_) => _delete(item),
                               child: PapeletaCard(
                                 item: item,
-                                onImprimir: (q) {
-                                  item.quantity = q;
-                                  _imprimirItem(item);
-                                },
+                                onImprimir: (q) => _imprimirItem(item, q),
                                 onRemover: () => _delete(item),
                                 onChangedQuantity: (q) {
                                   item.quantity = q;
@@ -517,13 +612,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
           bottom: 24,
           child: FloatingActionButton(
             backgroundColor: const Color(0xFFD32F2F),
-            onPressed: () async {
-              final r = await Navigator.pushNamed(context, '/barcode');
-              if (r is String && r.isNotEmpty) {
-                _eanController.text = r;
-                await _addStandalone();
-              }
-            },
+            onPressed: _addByScan,
             child: Image.asset('assets/icons/ic_scanner.png',
                 width: 24, height: 24, color: Colors.white),
           ),
