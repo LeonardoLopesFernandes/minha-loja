@@ -11,13 +11,24 @@ import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
 import 'package:minhaloja/widgets/cards.dart';
 
-String _formatToday() {
-  final d = DateTime.now();
-  final y = d.year.toString();
-  final m = d.month.toString().padLeft(2, '0');
-  final day = d.day.toString().padLeft(2, '0');
-  return '$y-$m-$day';
-}
+  String _formatToday() {
+    final d = DateTime.now();
+    final y = d.year.toString();
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$y-$m-$day';
+  }
+
+  String get _baseHint {
+    switch (_buscaTipo) {
+      case 'EAN':
+        return 'Digite o EAN';
+      case 'SAP':
+        return 'Digite o SAP';
+      default:
+        return 'Buscar Por Descrição';
+    }
+  }
 
 PrintingData _toPrintingData(SingleLabelPrintingData d) => PrintingData(
       ean: d.ean,
@@ -127,7 +138,10 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       ToastUtils.show(context, 'Digite um código');
       return;
     }
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _eanHint = 'BUSCANDO...';
+    });
     try {
       final resp = await api.getSingleLabelByEan(
         _storeId,
@@ -139,7 +153,10 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       if (!mounted) return;
       if (resp.items.isEmpty) {
         ToastUtils.showInfo(context, 'Nenhuma etiqueta encontrada');
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          _eanHint = _baseHint;
+        });
         return;
       }
       int added = 0;
@@ -167,7 +184,12 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       LogHelper.e('EtiquetasFragment: erro ao adicionar', e);
       ToastUtils.showError(context, 'Erro ao buscar etiqueta');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _eanHint = _baseHint;
+        });
+      }
     }
   }
 

@@ -77,10 +77,17 @@ class _LoginWebViewScreenState extends State<LoginWebViewScreen> {
         try {
           var e = document.getElementById('i0116');
           var p = document.getElementById('i0118');
-          if (e) { e.value = '$email'; }
-          if (p) { p.value = '$senha'; }
           var btn = document.getElementById('idSIButton9');
-          if (btn) { btn.click(); }
+          if (e && e.value.trim() === '') {
+            e.value = '$email';
+            if (btn) { btn.click(); }
+            return;
+          }
+          if (p && p.value.trim() === '') {
+            p.value = '$senha';
+            if (btn) { btn.click(); }
+            return;
+          }
         } catch(err) {}
       })();
     """;

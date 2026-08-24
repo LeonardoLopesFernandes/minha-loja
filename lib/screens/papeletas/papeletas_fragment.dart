@@ -59,6 +59,17 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     return '$y-$m-$d';
   }
 
+  String get _baseHint {
+    switch (_buscaTipo) {
+      case 'EAN':
+        return 'Digite o EAN';
+      case 'SAP':
+        return 'Digite o SAP';
+      default:
+        return 'Buscar Por Descrição';
+    }
+  }
+
   Future<void> _loadSaved() async {
     setState(() => _loading = true);
     try {
@@ -155,7 +166,10 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       ToastUtils.show(context, 'Informe um código');
       return;
     }
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _eanHint = 'BUSCANDO...';
+    });
     try {
       final results = await Future.wait([
         _api.getPriceSignStandalone(_store, Constants.tipoComum,
@@ -195,7 +209,12 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       LogHelper.e('Erro ao buscar papeleta', e);
       ToastUtils.showError(context, 'Erro ao buscar papeleta');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _eanHint = _baseHint;
+        });
+      }
     }
   }
 
@@ -224,7 +243,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       final list = List.generate(
           qty,
           (_) => _ajustarDadosLeveGanhe(
-              signData.copy(quantity: 1, size: tamanhoAtual)));
+              signData.copyWith(quantity: 1, size: tamanhoAtual)));
       await _send(list);
       setState(() => _items.removeWhere((e) => e.id == item.id));
       await _persist();
@@ -236,10 +255,10 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       return;
     }
 
-    final qtd = qty < _maxItens(tamanhoAtual) ? qtd : _maxItens(tamanhoAtual);
+    final qtd = qty < _maxItens(tamanhoAtual) ? qty : _maxItens(tamanhoAtual);
     final lista = List.generate(
         qtd,
-        (_) => _ajustarDadosLeveGanhe(signData.copy(
+        (_) => _ajustarDadosLeveGanhe(signData.copyWith(
               template: signData.template ?? _templatePorMovimento(item.movement),
               quantity: 1,
               size: tamanhoAtual,
@@ -264,7 +283,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       if (signData == null) continue;
       final qtd = item.quantity;
       for (int i = 0; i < qtd; i++) {
-        lista.add(_ajustarDadosLeveGanhe(signData.copy(
+        lista.add(_ajustarDadosLeveGanhe(signData.copyWith(
           template: signData.template ?? _templatePorMovimento(item.movement),
           quantity: 1,
           size: tamanhoAtual,
@@ -307,25 +326,31 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     }
   }
 
-  // Abre a visualização de preview (equivalente à ModeloEditavelActivity do Kotlin)
-  // e, ao voltar, efetua o envio para a impressora.
+  // Abre a tela de pré-visualização multi-item (equivalente à
+  // ModeloEditavelActivity do Kotlin), que lista TODOS os itens com
+  // checkboxes e envia para a impressora ao confirmar.
   Future<void> _openPreview(List<PapeletaPrintingData> lista,
       {PriceSign? itemToRemove, bool clearAll = false}) async {
-    final target = lista.isNotEmpty ? lista.first : null;
-    if (target == null) {
+    if (lista.isEmpty) {
       ToastUtils.show(context, 'Dados de impressão não disponíveis');
       return;
     }
-    await Navigator.pushNamed(context, '/pdf_viewer',
-        arguments: {'printingData': target});
+    final result = await Navigator.pushNamed(context, '/modelo_editavel',
+        arguments: {
+          'items': lista,
+          'size': _size,
+          'mostrarCheckbox': true,
+          'modoVencimentos': _usarVencimentos,
+        });
     if (!mounted) return;
-    await _send(lista);
-    if (clearAll) {
-      setState(() => _items.clear());
-    } else if (itemToRemove != null) {
-      setState(() => _items.removeWhere((e) => e.id == itemToRemove.id));
+    if (result == true) {
+      if (clearAll) {
+        setState(() => _items.clear());
+      } else if (itemToRemove != null) {
+        setState(() => _items.removeWhere((e) => e.id == itemToRemove.id));
+      }
+      await _persist();
     }
-    await _persist();
   }
 
   Future<void> _limparLista() async {

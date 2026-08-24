@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,12 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
+import 'package:minhaloja/screens/modelo/composite_preview_screen.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
+/// Espelha o fluxo multi-item da ModeloEditavelActivity do MLoja:
+/// lista todos os itens com checkboxes, seletor de tamanho,
+/// "GERAR PRÉ-VISUALIZAÇÃO" e "IMPRIMIR".
 class ModeloEditavelScreen extends StatefulWidget {
   const ModeloEditavelScreen({super.key});
 
@@ -22,33 +28,24 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   final ApiService api = ApiService(ApiClient.instance.getSlApiService());
   final SessionManager session = SessionManager.instance!;
 
-  PapeletaPrintingData? _data;
-  bool _loading = true;
-  String? _error;
+  List<PapeletaPrintingData> _items = [];
+  List<bool> _selected = [];
+  late String _size;
+  bool _semOverlay = false;
+  bool _modoEditavel = false;
+  bool _modoVencimentos = false;
+  bool _mostrarCheckbox = true;
+  bool _hideGerarPreview = false;
+
   bool _sending = false;
-  bool _previewing = false;
-  Uint8List? _previewBytes;
 
-  late String _template;
+  List<_ItemCtrls> _ctrls = [];
 
-  final TextEditingController _cProductName = TextEditingController();
-  final TextEditingController _cPrice = TextEditingController();
-  final TextEditingController _cPromotionPrice = TextEditingController();
-  final TextEditingController _cTakeWinQty = TextEditingController();
-  final TextEditingController _cTakeWinPrice = TextEditingController();
-  final TextEditingController _cTakeWinPercent = TextEditingController();
-  final TextEditingController _cInstallmentPrice = TextEditingController();
-  final TextEditingController _cInstallmentQty = TextEditingController();
-  final TextEditingController _cSize = TextEditingController();
-  final TextEditingController _cQuantity = TextEditingController();
-  final TextEditingController _cUnit = TextEditingController();
-
-  static const List<String> _templates = [
-    Constants.signTemplateModeloEditavel,
-    Constants.signTemplateDepor,
-    Constants.signTemplateDeporParcelado,
-    Constants.signTemplateLeveGanheCada,
-    Constants.signTemplateLeveGanheTotal,
+  static const List<String> _sizes = [
+    Constants.signSize1x1,
+    Constants.signSize2x1,
+    Constants.signSize4x1,
+    Constants.signSize6x1,
   ];
 
   @override
@@ -57,171 +54,86 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     _resolveArgs();
   }
 
-  Future<void> _resolveArgs() async {
-    try {
-      final args = ModalRoute.of(context)?.settings.arguments;
-      final startDate =
-          "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}";
-
-      PapeletaPrintingData? resolved;
-
-      if (args is PapeletaPrintingData) {
-        resolved = args;
-      } else if (args is PriceSign) {
-        resolved = args.printingData;
-      } else if (args is Map) {
-        final pd = args['printingData'];
-        if (pd is PapeletaPrintingData) {
-          resolved = pd;
-        } else if (pd is PriceSign) {
-          resolved = pd.printingData;
-        } else if (args['ean'] != null ||
-            args['sap'] != null ||
-            args['description'] != null) {
-          final storeId = session.getUserStore();
-          final resp = await api.getPriceSignStandalone(
-            storeId,
-            Constants.signTypePapeletaPromocionalModelo,
-            ean: args['ean'] as String?,
-            sapId: args['sap'] as String?,
-            description: args['description'] as String?,
-            startDate: startDate,
-          );
-          if (resp.items.isNotEmpty) resolved = resp.items.first.printingData;
-        }
+  void _resolveArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      final list = args['items'];
+      if (list is List<PapeletaPrintingData>) {
+        _items = List<PapeletaPrintingData>.from(list);
+      } else if (args['printingData'] is PapeletaPrintingData) {
+        _items = [args['printingData'] as PapeletaPrintingData];
       }
-
-      if (resolved != null) {
-        _data = resolved;
-        _template = Constants.templateNormalizado(resolved.template) ??
-            Constants.signTemplateModeloEditavel;
-        _populateControllers(resolved);
-      } else {
-        _error = 'Nenhum dado de papeleta disponível.';
-      }
-    } catch (e) {
-      LogHelper.e('ModeloEditavelScreen: erro ao resolver argumentos', e);
-      _error = 'Erro ao carregar dados.';
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      _size = args['size'] ?? Constants.signSize4x1;
+      if (!_sizes.contains(_size)) _size = Constants.signSize4x1;
+      _semOverlay = args['semOverlay'] ?? false;
+      _modoEditavel = args['modoEditavel'] ?? false;
+      _modoVencimentos = args['modoVencimentos'] ?? false;
+      _mostrarCheckbox = args['mostrarCheckbox'] ?? true;
+      _hideGerarPreview = args['hideGerarPreview'] ?? false;
     }
+    if (_items.isEmpty) {
+      _items = [];
+    }
+    _selected = List.filled(_items.length, true);
+    _ctrls = _items.map((d) => _ItemCtrls(d)).toList();
   }
 
-  void _populateControllers(PapeletaPrintingData d) {
-    _cProductName.text = d.productName;
-    _cPrice.text = d.price.toString();
-    _cPromotionPrice.text = d.promotionPrice?.toString() ?? '';
-    _cTakeWinQty.text = d.takeAndWinQuantity?.toString() ?? '';
-    _cTakeWinPrice.text = d.takeAndWinPrice?.toString() ?? '';
-    _cTakeWinPercent.text = d.takeAndWinPercent?.toString() ?? '';
-    _cInstallmentPrice.text = d.installmentPrice?.toString() ?? '';
-    _cInstallmentQty.text = d.installmentQuantity?.toString() ?? '';
-    _cSize.text = d.size ?? '';
-    _cQuantity.text = d.quantity?.toString() ?? '';
-    _cUnit.text = d.unit;
+  @override
+  void dispose() {
+    for (final c in _ctrls) c.dispose();
+    super.dispose();
   }
 
-  PapeletaPrintingData _buildData() {
-    final d = _data!;
-    return PapeletaPrintingData(
-      template: _template,
-      productName: _cProductName.text,
-      price: _parseDouble(_cPrice.text, d.price),
-      promotionPrice: _parseDoubleOrNull(_cPromotionPrice.text),
-      takeAndWinQuantity: _parseIntOrNull(_cTakeWinQty.text),
-      takeAndWinPrice: _parseDoubleOrNull(_cTakeWinPrice.text),
-      takeAndWinPercent: _parseIntOrNull(_cTakeWinPercent.text),
-      installmentPrice: _parseDoubleOrNull(_cInstallmentPrice.text),
-      installmentQuantity: _parseIntOrNull(_cInstallmentQty.text),
-      codSap: d.codSap,
-      ean: d.ean,
-      referenceDate: d.referenceDate,
-      size: _cSize.text.isEmpty ? d.size : _cSize.text,
-      quantity: _parseIntOrNull(_cQuantity.text) ?? d.quantity,
-      unit: _cUnit.text.isEmpty ? d.unit : _cUnit.text,
+  PapeletaPrintingData _currentData(int i) {
+    if (!_modoEditavel) return _items[i];
+    final c = _ctrls[i];
+    final d = _items[i];
+    return d.copyWith(
+      productName: c.name.text,
+      price: _d(c.price.text, d.price),
+      promotionPrice: _dOrNull(c.promo.text),
+      takeAndWinQuantity: _iOrNull(c.twQty.text),
+      takeAndWinPrice: _dOrNull(c.twPrice.text),
+      installmentQuantity: _iOrNull(c.instQty.text),
+      installmentPrice: _dOrNull(c.instPrice.text),
+      ean: c.ean.text,
     );
   }
 
-  double _parseDouble(String v, double fallback) =>
-      double.tryParse(v.replaceAll(',', '.')) ?? fallback;
-  double? _parseDoubleOrNull(String v) {
-    if (v.isEmpty) return null;
-    return double.tryParse(v.replaceAll(',', '.'));
+  double _d(String v, double fb) =>
+      double.tryParse(v.replaceAll(',', '.')) ?? fb;
+  double? _dOrNull(String v) =>
+      v.trim().isEmpty ? null : double.tryParse(v.replaceAll(',', '.'));
+  int? _iOrNull(String v) => v.trim().isEmpty ? null : int.tryParse(v);
+
+  bool _isComum(PapeletaPrintingData d) {
+    if (d.template == Constants.signTemplateDeporParcelado) return true;
+    final hasPromo = d.promotionPrice != null && d.promotionPrice! > 0;
+    final hasTW = d.takeAndWinQuantity != null && d.takeAndWinQuantity! > 0;
+    if (hasPromo || hasTW) return false;
+    return true;
   }
 
-  int? _parseIntOrNull(String v) {
-    if (v.isEmpty) return null;
-    return int.tryParse(v);
-  }
-
-  String _computedDisplay() {
-    final price = _parseDouble(_cPrice.text, 0);
-    final promo = _parseDoubleOrNull(_cPromotionPrice.text);
-    final twQty = _parseIntOrNull(_cTakeWinQty.text);
-    final twPrice = _parseDoubleOrNull(_cTakeWinPrice.text);
-    final instPrice = _parseDoubleOrNull(_cInstallmentPrice.text);
-    final instQty = _parseIntOrNull(_cInstallmentQty.text);
-
-    switch (_template) {
-      case Constants.signTemplateDepor:
-        return 'De: R\$ ${price.toStringAsFixed(2)}  Por: R\$ ${(promo ?? price).toStringAsFixed(2)}';
-      case Constants.signTemplateDeporParcelado:
-        if (instQty != null && instQty > 0 && instPrice != null) {
-          return 'Parcelado: ${instQty}x de R\$ ${instPrice.toStringAsFixed(2)}';
-        }
-        return 'Parcelado';
-      case Constants.signTemplateLeveGanheCada:
-      case Constants.signTemplateLeveGanheTotal:
-        final total = Constants.totalLeveGanhePorTemplate(
-            _template, promo, twPrice, twQty);
-        final qty = twQty ?? 1;
-        return 'Leve $qty por R\$ ${total.toStringAsFixed(2)}';
-      case Constants.signTemplateModeloEditavel:
-      default:
-        return _cProductName.text.isNotEmpty
-            ? _cProductName.text
-            : 'Modelo Editável';
-    }
-  }
-
-  Future<void> _doPreview() async {
-    if (_data == null) return;
-    setState(() => _previewing = true);
-    try {
-      final bytes = await api.previewPriceSign(_buildData());
-      if (!mounted) return;
-      setState(() => _previewBytes = bytes);
-      await Navigator.pushNamed(context, '/pdf_viewer', arguments: {
-        'title': _cProductName.text,
-        'bytes': bytes,
-      });
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-      } else {
-        ToastUtils.showError(context, e.message);
+  Future<void> _imprimir() async {
+    final toSend = <PapeletaPrintingData>[];
+    for (int i = 0; i < _items.length; i++) {
+      if (!_mostrarCheckbox || _selected[i]) {
+        toSend.add(_currentData(i).copyWith(size: _size, quantity: 1));
       }
-    } catch (e) {
-      ToastUtils.showError(context, 'Erro ao gerar pré-visualização.');
-    } finally {
-      if (mounted) setState(() => _previewing = false);
     }
-  }
-
-  Future<void> _doSend() async {
-    if (_data == null) return;
+    if (toSend.isEmpty) {
+      ToastUtils.show(context, 'Nenhum item selecionado');
+      return;
+    }
     setState(() => _sending = true);
-    final storeId = session.getUserStore();
     try {
       await api.sendPriceSigns(
-        storeId,
-        SendPriceSignRequest(products: [_buildData()]),
+        session.getUserStore(),
+        SendPriceSignRequest(products: toSend),
       );
       if (!mounted) return;
-      ToastUtils.showSuccess(context, 'Papeleta enviada com sucesso.');
-      Navigator.pop(context);
+      ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
+      Navigator.pop(context, true);
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
@@ -229,17 +141,50 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         ToastUtils.showError(context, e.message);
       }
     } catch (e) {
-      ToastUtils.showError(context, 'Erro ao enviar papeleta.');
+      ToastUtils.showError(context, 'Erro ao enviar papeletas');
+      LogHelper.e('ModeloEditavel: erro ao enviar', e);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
+  void _abrirPreviewItem(int i) {
+    // A API não possui 6X1; usa 1X1 como base (mesmo do grid).
+    final size = _size.toUpperCase() == Constants.signSize6x1
+        ? Constants.signSize1x1
+        : _size;
+    Navigator.pushNamed(context, '/pdf_viewer', arguments: {
+      'printingData': _currentData(i).copyWith(size: size),
+    });
+  }
+
+  void _abrirPreviewTodos() {
+    final sel = <PapeletaPrintingData>[];
+    for (int i = 0; i < _items.length; i++) {
+      if (!_mostrarCheckbox || _selected[i]) {
+        sel.add(_currentData(i).copyWith(size: _size));
+      }
+    }
+    if (sel.isEmpty) {
+      ToastUtils.show(context, 'Nenhum item selecionado');
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CompositePreviewScreen(items: sel, size: _size),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final title = _modoVencimentos
+        ? 'PAPELETA DE VENCIMENTOS'
+        : 'PAPELETA ${_size.toUpperCase()}';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Modelo Editável'),
+        title: Text(title),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         leading: IconButton(
@@ -247,188 +192,403 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: _buildBody(),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null || _data == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(_error ?? 'Dados indisponíveis.',
-              style: AppTextStyles.body),
-        ),
-      );
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Column(
         children: [
-          _sectionTitle('Dados do Produto'),
-          _textField('Nome do produto', _cProductName),
-          _textField('Preço', _cPrice, keyboard: TextInputType.number),
-          _textField('Preço promocional',
-              _cPromotionPrice,
-              keyboard: TextInputType.number),
-          Row(
-            children: [
-              Expanded(
-                  child: _textField('Tamanho', _cSize)),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _textField('Quantidade', _cQuantity,
-                      keyboard: TextInputType.number)),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _textField('Unidade', _cUnit)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _sectionTitle('Modelo do Cartaz'),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: AppColors.cardBorder),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: _template,
-                items: _templates
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                    .toList(),
-                onChanged: (v) => setState(() => _template = v!),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (_template == Constants.signTemplateModeloEditavel) ...[
-            _sectionTitle('Campos Editáveis'),
-            _textField('Texto/Preço extra', _cPromotionPrice,
-                keyboard: TextInputType.number),
-            _textField('Preço extra 2', _cTakeWinPrice,
-                keyboard: TextInputType.number),
-          ],
-          if (_template == Constants.signTemplateDepor) ...[
-            _sectionTitle('De / Por'),
-            _textField('Preço De', _cPrice,
-                keyboard: TextInputType.number),
-            _textField('Preço Por', _cPromotionPrice,
-                keyboard: TextInputType.number),
-          ],
-          if (_template == Constants.signTemplateDeporParcelado) ...[
-            _sectionTitle('Parcelado'),
-            Row(
-              children: [
-                Expanded(
-                    child: _textField('Qtde parcelas', _cInstallmentQty,
-                        keyboard: TextInputType.number)),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _textField('Valor parcela', _cInstallmentPrice,
-                        keyboard: TextInputType.number)),
-              ],
-            ),
-          ],
-          if (_template == Constants.signTemplateLeveGanheCada ||
-              _template == Constants.signTemplateLeveGanheTotal) ...[
-            _sectionTitle('Leve e Ganhe'),
-            Row(
-              children: [
-                Expanded(
-                    child: _textField('Leve (qtd)', _cTakeWinQty,
-                        keyboard: TextInputType.number)),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _textField('Preço total', _cTakeWinPrice,
-                        keyboard: TextInputType.number)),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _textField('% desc.', _cTakeWinPercent,
-                        keyboard: TextInputType.number)),
-              ],
-            ),
-          ],
-          const SizedBox(height: 20),
-          _sectionTitle('Pré-visualização'),
-          Container(
-            height: 220,
-            decoration: BoxDecoration(
-              color: AppColors.gray100,
-              border: Border.all(color: AppColors.cardBorder),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: _previewBytes != null
-                ? const Text('Pré-visualização gerada. Toque em "Visualizar".',
-                    style: AppTextStyles.subtitle)
-                : Text(
-                    _computedDisplay(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.gray900),
+          Expanded(
+            child: _items.isEmpty
+                ? const Center(child: Text('Nenhum dado disponível'))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _items.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) => _buildItemCard(i),
                   ),
           ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _previewing ? null : _doPreview,
-            icon: const Icon(Icons.visibility),
-            label: Text(_previewing ? 'Gerando...' : 'Visualizar'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: _sending ? null : _doSend,
-            icon: const Icon(Icons.send),
-            label: Text(_sending ? 'Enviando...' : 'Salvar / Enviar'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.green,
-              foregroundColor: Colors.white,
-            ),
-          ),
+          _buildBottomBar(),
         ],
       ),
     );
   }
 
-  Widget _sectionTitle(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8, top: 4),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primaryDark)),
-      );
-
-  Widget _textField(String label, TextEditingController controller,
-      {TextInputType? keyboard}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboard,
-        decoration: InputDecoration(
-          labelText: label,
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AppColors.cardBorder),
-          ),
+  Widget _buildItemCard(int i) {
+    final d = _currentData(i);
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 20,
+                  color: AppColors.red,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'ITEM ${i + 1}',
+                    style: const TextStyle(
+                      color: AppColors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                if (_mostrarCheckbox)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Incluir'),
+                      Checkbox(
+                        value: _selected[i],
+                        activeColor: AppColors.primary,
+                        onChanged: (v) =>
+                            setState(() => _selected[i] = v ?? false),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (_modoEditavel) _buildEditableForm(i) else _buildSummary(d),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _abrirPreviewItem(i),
+                icon: const Icon(Icons.visibility, size: 18),
+                label: const Text('Ver pré-visualização'),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildSummary(PapeletaPrintingData d) {
+    final infos = <String>[
+      d.productName,
+      'Preço: R\$ ${d.price.toStringAsFixed(2)}',
+      if (d.promotionPrice != null) 'Promo: R\$ ${d.promotionPrice!.toStringAsFixed(2)}',
+      if (d.takeAndWinQuantity != null) 'Leve e Ganhe: ${d.takeAndWinQuantity}',
+      'EAN: ${d.ean}',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: infos
+          .map((t) => Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(t,
+                    style: const TextStyle(fontSize: 13, color: Colors.black87)),
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _buildEditableForm(int i) {
+    final c = _ctrls[i];
+    final d = _items[i];
+    final hasInst = d.installmentQuantity != null && d.installmentQuantity! > 0;
+    final hasPromo = d.promotionPrice != null && d.promotionPrice! > 0;
+    final hasTake = d.takeAndWinQuantity != null && d.takeAndWinQuantity! > 0;
+    final ehDePor = hasPromo && !hasTake && !hasInst;
+    final ehComum = !hasPromo && !hasTake && !hasInst;
+
+    Widget field(String label, TextEditingController ctrl,
+        {TextInputType kb = TextInputType.text}) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: TextField(
+          controller: ctrl,
+          keyboardType: kb,
+          decoration: InputDecoration(
+            labelText: label,
+            isDense: true,
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppColors.cardBorder)),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        field('Nome do Produto', c.name),
+        if (_modoVencimentos)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: TextField(
+              controller: c.validade,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Validade (DD/MM/AAAA)',
+                isDense: true,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: AppColors.cardBorder)),
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: field('Preço', c.price,
+                  kb: const TextInputType.numberWithOptions(decimal: true)),
+            ),
+            if (!ehComum)
+              const SizedBox(width: 8),
+            if (!ehComum)
+              Expanded(
+                child: field('Preço Promocional', c.promo,
+                    kb: const TextInputType.numberWithOptions(decimal: true)),
+              ),
+          ],
+        ),
+        if (!ehDePor && !ehComum)
+          Row(
+            children: [
+              Expanded(
+                child: field(
+                    hasInst ? 'Parcela (Qtd)' : 'Leve (Qtd)', c.twQty,
+                    kb: TextInputType.number),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: field(
+                    hasInst ? 'Valor da parcela' : 'Preço Leve e Ganhe',
+                    c.twPrice,
+                    kb: const TextInputType.numberWithOptions(decimal: true)),
+              ),
+            ],
+          ),
+        field('EAN', c.ean, kb: TextInputType.number),
+      ],
+    );
+  }
+
+  Widget _buildBottomBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 6,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: _sizes
+                .map((s) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: ChoiceChip(
+                          label: Text(s.replaceAll('X', '×'),
+                              textAlign: TextAlign.center),
+                          selected: _size == s,
+                          selectedColor: AppColors.primary,
+                          labelStyle: TextStyle(
+                            color: _size == s ? Colors.white : Colors.black87,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          onSelected: (_) => setState(() => _size = s),
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (!_hideGerarPreview)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _abrirPreviewTodos,
+                    icon: const Icon(Icons.preview),
+                    label:
+                        Text('GERAR PRÉ-VISUALIZAÇÃO ${_size.toUpperCase()}'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              if (!_hideGerarPreview) const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _sending ? null : _imprimir,
+                  icon: const Icon(Icons.send),
+                  label:
+                      Text(_sending ? 'ENVIANDO...' : 'IMPRIMIR'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemCtrls {
+  final TextEditingController name = TextEditingController();
+  final TextEditingController price = TextEditingController();
+  final TextEditingController promo = TextEditingController();
+  final TextEditingController twQty = TextEditingController();
+  final TextEditingController twPrice = TextEditingController();
+  final TextEditingController instQty = TextEditingController();
+  final TextEditingController instPrice = TextEditingController();
+  final TextEditingController ean = TextEditingController();
+  final TextEditingController validade = TextEditingController();
+
+  _ItemCtrls(PapeletaPrintingData d) {
+    name.text = d.productName;
+    price.text = d.price.toString();
+    promo.text = d.promotionPrice?.toString() ?? '';
+    twQty.text = d.takeAndWinQuantity?.toString() ?? '';
+    twPrice.text = d.takeAndWinPrice?.toString() ?? '';
+    instQty.text = d.installmentQuantity?.toString() ?? '';
+    instPrice.text = d.installmentPrice?.toString() ?? '';
+    ean.text = d.ean;
+  }
+
+  void dispose() {
+    name.dispose();
+    price.dispose();
+    promo.dispose();
+    twQty.dispose();
+    twPrice.dispose();
+    instQty.dispose();
+    instPrice.dispose();
+    ean.dispose();
+    validade.dispose();
+  }
+}
+
+/// Pré-visualização paginada de todos os itens selecionados, gerando o PDF
+/// de cada um via API (equivalente à grade composta no Kotlin).
+class _PreviewAllScreen extends StatefulWidget {
+  final List<PapeletaPrintingData> items;
+  final String size;
+  const _PreviewAllScreen({required this.items, required this.size});
+
+  @override
+  State<_PreviewAllScreen> createState() => _PreviewAllScreenState();
+}
+
+class _PreviewAllScreenState extends State<_PreviewAllScreen> {
+  final ApiService api = ApiService(ApiClient.instance.getSlApiService());
+  final PageController _pageController = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+            'Pré-visualização (${_page + 1}/${widget.items.length})'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.items.length,
+        onPageChanged: (i) => setState(() => _page = i),
+        itemBuilder: (_, i) => _PreviewPage(
+          key: ValueKey(i),
+          api: api,
+          data: widget.items[i],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewPage extends StatefulWidget {
+  final ApiService api;
+  final PapeletaPrintingData data;
+  const _PreviewPage({super.key, required this.api, required this.data});
+
+  @override
+  State<_PreviewPage> createState() => _PreviewPageState();
+}
+
+class _PreviewPageState extends State<_PreviewPage> {
+  late final WebViewController _controller;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted);
+    _generate();
+  }
+
+  Future<void> _generate() async {
+    try {
+      final bytes = await widget.api.previewPriceSign(widget.data);
+      if (!mounted) return;
+      final dataUrl =
+          'data:application/pdf;base64,${base64Encode(bytes)}';
+      await _controller.loadRequest(Uri.parse(dataUrl));
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        SessionExpiredHandler.handleSessionExpired(context);
+      } else {
+        ToastUtils.showError(context, e.message);
+      }
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Erro ao gerar PDF');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(_error!, style: AppTextStyles.body),
+        ),
+      );
+    }
+    return WebViewWidget(controller: _controller);
   }
 }

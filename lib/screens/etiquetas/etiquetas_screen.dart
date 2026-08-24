@@ -143,6 +143,20 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
     return int.tryParse(num);
   }
 
+  String _printerLabel(String label) {
+    final match =
+        RegExp(r'Zebra\s*\d+', caseSensitive: false).firstMatch(label);
+    if (match != null) {
+      final raw = match.group(0)!;
+      return 'Zebra ${raw.replaceAll(RegExp(r'[^0-9]'), '')}';
+    }
+    return label;
+  }
+
+  bool get _allDepartmentsSelected =>
+      _departments.isNotEmpty &&
+      _selectedDepartments.length == _departments.length;
+
   void _onNextDay() {
     final next = _fromApi(_currentDate).add(const Duration(days: 1));
     _currentDate = _toApi(next);
@@ -235,20 +249,38 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
           width: double.maxFinite,
           child: ListView(
             shrinkWrap: true,
-            children: _departments.map((d) {
-              final id = d.id;
-              return StatefulBuilder(
+            children: [
+              StatefulBuilder(
                 builder: (c, setInner) => CheckboxListTile(
-                  title: Text('${d.id} - ${d.label}'),
-                  value: temp.contains(id),
+                  title: const Text('Todos os departamentos'),
+                  value: temp.length == _departments.length,
                   onChanged: (v) {
                     setInner(() {
-                      if (v == true) temp.add(id); else temp.remove(id);
+                      if (v == true) {
+                        temp.addAll(_departments.map((d) => d.id));
+                      } else {
+                        temp.clear();
+                      }
                     });
                   },
                 ),
-              );
-            }).toList(),
+              ),
+              const Divider(),
+              ..._departments.map((d) {
+                final id = d.id;
+                return StatefulBuilder(
+                  builder: (c, setInner) => CheckboxListTile(
+                    title: Text('$id - ${d.label}'),
+                    value: temp.contains(id),
+                    onChanged: (v) {
+                      setInner(() {
+                        if (v == true) temp.add(id); else temp.remove(id);
+                      });
+                    },
+                  ),
+                );
+              }),
+            ],
           ),
         ),
         actions: [
@@ -490,7 +522,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
                   items: _printers
                       .map((p) => DropdownMenuItem(
                             value: p.printerId,
-                            child: Text(p.label),
+                            child: Text(_printerLabel(p.label)),
                           ))
                       .toList(),
                   onChanged: (v) {
@@ -542,7 +574,9 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
                     child: Text(
                       _selectedDepartments.isEmpty
                           ? 'Departamentos'
-                          : '${_selectedDepartments.length} selecionado(s)',
+                          : _allDepartmentsSelected
+                              ? 'Todos'
+                              : '${_selectedDepartments.length} selecionado(s)',
                       style: TextStyle(
                         color: _selectedDepartments.isEmpty
                             ? Colors.grey[600]

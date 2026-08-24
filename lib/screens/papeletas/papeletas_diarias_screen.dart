@@ -93,9 +93,17 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
     setState(() => _isLoading = true);
     try {
       final filters = await _api.getPriceSignFilters(_storeId);
-      _sizes = filters.size;
-      if (_sizes.isEmpty) _sizes = ['2X1'];
-      if (_sizes.contains('2X1')) _selectedSize = '2X1';
+      _sizes = [
+        Constants.signSize1x1,
+        Constants.signSize2x1,
+        Constants.signSize4x1,
+        Constants.signSize6x1,
+      ];
+      if (filters.size.isNotEmpty) {
+        final merged = <String>{...filters.size, ..._sizes};
+        _sizes = merged.toList();
+      }
+      _selectedSize = _sizes.first;
 
       final deptFilters = await _api.getPriceTagFilters(_storeId, _currentDate);
       _departments = deptFilters.departments;
@@ -207,33 +215,31 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
     }).toList();
 
     if (_usarModeloPersonalizado) {
-      final first = data.first.copyWith(
-          template: Constants.signTemplateModelo);
-      await Navigator.pushNamed(context, '/pdf_viewer',
-          arguments: {'printingData': first});
+      final first = data.first.copyWith(template: Constants.signTemplateModelo);
+      final r = await Navigator.pushNamed(context, '/modelo_editavel',
+          arguments: {
+            'items': [first],
+            'size': _selectedSize,
+            'modoEditavel': true,
+            'mostrarCheckbox': false,
+            'hideGerarPreview': true,
+          });
+      if (r == true) await _loadSigns();
       return;
     }
 
-    setState(() => _isLoading = true);
-    try {
-      await _api.sendPriceSigns(
-          _storeId, SendPriceSignRequest(products: data));
-      ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
-      await _loadSigns();
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-      } else {
-        ToastUtils.showError(context, e.message);
-      }
-      LogHelper.e('PapeletasDiarias: erro ao enviar', e);
-    } catch (e) {
-      ToastUtils.showError(context, 'Erro ao enviar papeletas');
-      LogHelper.e('PapeletasDiarias: erro ao enviar', e);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    final r = await Navigator.pushNamed(context, '/modelo_editavel',
+        arguments: {
+          'items': data,
+          'size': _selectedSize,
+          'mostrarCheckbox': true,
+        });
+    if (r == true) await _loadSigns();
   }
+
+  bool get _allDepartmentsSelected =>
+      _departments.isNotEmpty &&
+      _selectedDepartments.length == _departments.length;
 
   void _openDepartmentDialog() async {
     final temp = <String>{..._selectedDepartments};
@@ -245,17 +251,33 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
           width: double.maxFinite,
           child: ListView(
             shrinkWrap: true,
-            children: _departments.map((d) {
-              return StatefulBuilder(
+            children: [
+              StatefulBuilder(
                 builder: (c, setInner) => CheckboxListTile(
-                  title: Text('${d.id} - ${d.label}'),
-                  value: temp.contains(d.id),
+                  title: const Text('Todos os departamentos'),
+                  value: temp.length == _departments.length,
                   onChanged: (v) => setInner(() {
-                    if (v == true) temp.add(d.id); else temp.remove(d.id);
+                    if (v == true) {
+                      temp.addAll(_departments.map((d) => d.id));
+                    } else {
+                      temp.clear();
+                    }
                   }),
                 ),
-              );
-            }).toList(),
+              ),
+              const Divider(),
+              ..._departments.map((d) {
+                return StatefulBuilder(
+                  builder: (c, setInner) => CheckboxListTile(
+                    title: Text('${d.id} - ${d.label}'),
+                    value: temp.contains(d.id),
+                    onChanged: (v) => setInner(() {
+                      if (v == true) temp.add(d.id); else temp.remove(d.id);
+                    }),
+                  ),
+                );
+              }),
+            ],
           ),
         ),
         actions: [
@@ -581,7 +603,9 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
                     child: Text(
                       _selectedDepartments.isEmpty
                           ? 'Departamentos'
-                          : '${_selectedDepartments.length} selecionado(s)',
+                          : _allDepartmentsSelected
+                              ? 'Todos'
+                              : '${_selectedDepartments.length} selecionado(s)',
                       style: TextStyle(
                         color: _selectedDepartments.isEmpty
                             ? Colors.grey[600]
