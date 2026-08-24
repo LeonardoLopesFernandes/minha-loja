@@ -1,422 +1,657 @@
 import 'package:flutter/material.dart';
-import 'package:minhaloja/core/constants.dart';
-import 'package:minhaloja/core/session_manager.dart';
-import 'package:minhaloja/core/lista_store.dart';
-import 'package:minhaloja/core/theme.dart';
-import 'package:minhaloja/models/models.dart';
-import 'package:minhaloja/network/api_client.dart';
-import 'package:minhaloja/network/api_service.dart';
-import 'package:minhaloja/utils/toast_utils.dart';
-import 'package:minhaloja/utils/log_helper.dart';
-import 'package:minhaloja/utils/session_expired_handler.dart';
-import 'package:minhaloja/widgets/cards.dart';
+import '../../models/models.dart';
+import '../../network/api_service.dart';
+import '../../network/api_client.dart';
+import '../../widgets/cards.dart';
+import '../../core/session_manager.dart';
+import '../../core/constants.dart';
+import '../../core/theme.dart';
+import '../../utils/toast_utils.dart';
+import '../../utils/log_helper.dart';
+import '../../utils/session_expired_handler.dart';
 
 class PapeletasDiariasScreen extends StatefulWidget {
   const PapeletasDiariasScreen({super.key});
 
   @override
-  State<PapeletasDiariasScreen> createState() =>
-      _PapeletasDiariasScreenState();
+  State<PapeletasDiariasScreen> createState() => _PapeletasDiariasScreenState();
 }
 
 class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
   final ApiService _api = ApiService(ApiClient.instance.getSlApiService());
-  final SessionManager _session = SessionManager.instance!;
+  final ScrollController _scrollController = ScrollController();
 
-  late String _store;
-  late String _startDate;
+  String _storeId = Constants.defaultStore;
 
-  bool _loading = false;
+  bool _isLoading = false;
+  List<PriceSign> _allItems = [];
   List<PriceSign> _items = [];
 
-  List<SupplyType> _supplyTypes = [];
+  String _currentDate = '';
+  String _today = '';
+
+  int _naoImpressas = 0;
+  int _impressas = 0;
+  int _total = 0;
+
+  List<Department> _departments = [];
+  final Set<String> _selectedDepartments = {};
+
   List<String> _sizes = [];
+  String _selectedSize = '2X1';
 
-  String _type = Constants.tipoComum;
-  String? _department;
-  String? _size;
-  String _status = Constants.statusAll;
+  static const List<String> _movementOptions = [
+    'Todos',
+    'De/Por',
+    'Leve e Ganhe',
+    'Comum'
+  ];
+  int _movementPos = 0;
+  String _selectedMovement = '';
 
-  final TextEditingController _eanController = TextEditingController();
+  static const List<String> _typeOptions = [
+    'Comum',
+    'Promocional',
+    'Promocional (Modelo)'
+  ];
+  int _typePos = 0;
+  String _selectedType = Constants.signTypePapeletaComum;
+  bool _usarModeloPersonalizado = false;
+
+  static const List<String> _statusOptions = [
+    'Todas',
+    'Impressas',
+    'Não impressas'
+  ];
+  int _statusPos = 0;
+  String _selectedStatus = Constants.statusAll;
 
   @override
   void initState() {
     super.initState();
-    _store = _session.getUserStore();
-    _startDate = _today();
-    _loadFilters();
-    _loadSavedAndSigns();
-  }
-
-  @override
-  void dispose() {
-    _eanController.dispose();
-    super.dispose();
-  }
-
-  String _today() {
+    _storeId = SessionManager.instance?.getUserStore() ?? Constants.defaultStore;
     final now = DateTime.now();
-    final y = now.year.toString().padLeft(4, '0');
-    final m = now.month.toString().padLeft(2, '0');
-    final d = now.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
+    _today = _toApi(now);
+    _currentDate = _today;
+    _loadFilters();
+  }
+
+  String _toApi(DateTime d) =>
+      '${d.year}-${_pad(d.month)}-${_pad(d.day)}';
+  String _pad(int n) => n.toString().padLeft(2, '0');
+  DateTime _fromApi(String ymd) {
+    final p = ymd.split('-');
+    return DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
+  }
+
+  String _toDisplay(String ymd) {
+    final p = ymd.split('-');
+    return p.length == 3 ? '${p[2]}/${p[1]}' : ymd;
   }
 
   Future<void> _loadFilters() async {
+    setState(() => _isLoading = true);
     try {
-      final resp = await _api.getPriceSignFilters(_store);
-      if (!mounted) return;
-      setState(() {
-        _supplyTypes = resp.supplyTypes;
-        _sizes = resp.size;
-      });
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-        return;
-      }
-      LogHelper.e('Erro ao carregar filtros de papeletas diárias', e);
-    } catch (e) {
-      LogHelper.e('Erro ao carregar filtros de papeletas diárias', e);
-    }
-  }
+      final filters = await _api.getPriceSignFilters(_storeId);
+      _sizes = filters.size;
+      if (_sizes.isEmpty) _sizes = ['2X1'];
+      if (_sizes.contains('2X1')) _selectedSize = '2X1';
 
-  Future<void> _loadSavedAndSigns() async {
-    final saved = await ListaStore.instance.getPapeletas();
-    if (!mounted) return;
-    setState(() {
-      _items = List<PriceSign>.from(saved);
-    });
-    await _loadSigns();
+      final deptFilters = await _api.getPriceTagFilters(_storeId, _currentDate);
+      _departments = deptFilters.departments;
+
+      await _loadSigns();
+    } on ApiException catch (e) {
+      if (e.isSessionExpired) {
+        SessionExpiredHandler.handleSessionExpired(context);
+      } else {
+        ToastUtils.showError(context, e.message);
+      }
+      LogHelper.e('PapeletasDiarias: erro filtros', e);
+    } catch (e) {
+      ToastUtils.showError(context, 'Erro ao carregar filtros');
+      LogHelper.e('PapeletasDiarias: erro filtros', e);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadSigns() async {
-    if (!mounted) return;
-    setState(() => _loading = true);
+    setState(() => _isLoading = true);
     try {
-      final resp = await _api.getPriceSigns(
-        _store,
-        _type,
-        department: _department,
-        size: _size,
-        status: _status,
-        startDate: _startDate,
-      );
-      if (!mounted) return;
-      final merged = List<PriceSign>.from(resp.priceSigns);
-      for (final s in _items) {
-        if (!merged.any((e) => e.id == s.id)) merged.add(s);
+      final comum = await _api.getPriceSigns(_storeId, Constants.signTypePapeletaComum,
+          status: _selectedStatus, startDate: _currentDate);
+      final promo = await _api.getPriceSigns(
+          _storeId, Constants.signTypePapeletaPromocional,
+          status: _selectedStatus, startDate: _currentDate);
+      List<PriceSign> all = [...comum.priceSigns, ...promo.priceSigns];
+
+      if (_selectedMovement.isNotEmpty) {
+        all = all.where((it) => it.movement == _selectedMovement).toList();
       }
-      setState(() {
-        _items = merged;
-        _loading = false;
-      });
-      await _persist();
+      if (_selectedDepartments.isNotEmpty) {
+        all = all.where((it) {
+          final num = _deptNumber(it.department);
+          return num != null && _selectedDepartments.contains(num);
+        }).toList();
+      }
+      all.sort((a, b) => _deptNumber(a.department)
+          .toString()
+          .compareTo(_deptNumber(b.department).toString()));
+
+      _allItems = all;
+      _naoImpressas = all.where((e) => e.status == Constants.statusNaoImpressas).length;
+      _impressas = all.where((e) => e.status == Constants.statusImpressas).length;
+      _total = all.length;
+
+      setState(() => _items = all);
     } on ApiException catch (e) {
-      if (e.statusCode == 401) {
+      if (e.isSessionExpired) {
         SessionExpiredHandler.handleSessionExpired(context);
-        return;
+      } else {
+        ToastUtils.showError(context, e.message);
       }
-      LogHelper.e('Erro ao carregar papeletas diárias', e);
-      if (mounted) setState(() => _loading = false);
+      LogHelper.e('PapeletasDiarias: erro ao carregar', e);
+    } catch (e) {
       ToastUtils.showError(context, 'Erro ao carregar papeletas');
-    } catch (e) {
-      LogHelper.e('Erro ao carregar papeletas diárias', e);
-      if (mounted) setState(() => _loading = false);
+      LogHelper.e('PapeletasDiarias: erro ao carregar', e);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _persist() async {
-    await ListaStore.instance.savePapeletas(_items);
+  int? _deptNumber(String department) {
+    final num = department.split(' -').first.trim();
+    return int.tryParse(num);
   }
 
-  Future<void> _addStandalone() async {
-    final ean = _eanController.text.trim();
-    if (ean.isEmpty) {
-      ToastUtils.show(context, 'Informe um EAN');
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      final resp = await _api.getPriceSignStandalone(
-        _store,
-        _type,
-        ean: ean,
-        startDate: _startDate,
-      );
-      if (!mounted) return;
-      final newItems = resp.items
-          .where((e) => !_items.any((i) => i.id == e.id))
-          .toList();
-      setState(() {
-        _items.addAll(newItems);
-        _loading = false;
-      });
-      await _persist();
-      ToastUtils.showSuccess(
-          context, '${newItems.length} papeleta(s) adicionada(s)');
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-        return;
-      }
-      LogHelper.e('Erro ao buscar papeleta diária', e);
-      if (mounted) setState(() => _loading = false);
-      ToastUtils.showError(context, 'Erro ao buscar papeleta');
-    } catch (e) {
-      LogHelper.e('Erro ao buscar papeleta diária', e);
-      if (mounted) setState(() => _loading = false);
-    }
+  void _onNextDay() {
+    final next = _fromApi(_currentDate).add(const Duration(days: 1));
+    _currentDate = _toApi(next);
+    _loadSigns();
   }
 
-  Future<void> _send() async {
-    final selected = _items
-        .where((e) => e.checkbox)
-        .map((e) => e.printingData)
-        .whereType<PapeletaPrintingData>()
-        .toList();
+  void _onSelectAll(bool? value) {
+    setState(() {
+      for (var it in _items) it.checkbox = value ?? false;
+    });
+  }
+
+  void _onItemCheck(PriceSign item, bool? value) =>
+      setState(() => item.checkbox = value ?? false);
+
+  void _onItemQty(PriceSign item, int qty) =>
+      setState(() => item.quantity = qty);
+
+  Future<void> _onPrint() async {
+    final selected = _items.where((e) => e.checkbox).toList();
     if (selected.isEmpty) {
       ToastUtils.show(context, 'Selecione ao menos uma papeleta');
       return;
     }
-    setState(() => _loading = true);
+    final data = selected.map((e) {
+      final pd = e.printingData;
+      if (pd == null) {
+        return PapeletaPrintingData(
+          productName: e.description,
+          price: double.tryParse(e.price) ?? 0,
+          codSap: e.sap,
+          ean: e.ean,
+          referenceDate: _currentDate,
+          size: _selectedSize,
+          quantity: e.quantity,
+          unit: '',
+        );
+      }
+      return pd.copyWith(size: _selectedSize, quantity: e.quantity);
+    }).toList();
+
+    if (_usarModeloPersonalizado) {
+      final first = data.first.copyWith(
+          template: Constants.signTemplateModelo);
+      await Navigator.pushNamed(context, '/pdf_viewer',
+          arguments: {'printingData': first});
+      return;
+    }
+
+    setState(() => _isLoading = true);
     try {
       await _api.sendPriceSigns(
-        _store,
-        SendPriceSignRequest(products: selected),
-      );
-      if (!mounted) return;
+          _storeId, SendPriceSignRequest(products: data));
       ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
+      await _loadSigns();
     } on ApiException catch (e) {
-      if (e.statusCode == 401) {
+      if (e.isSessionExpired) {
         SessionExpiredHandler.handleSessionExpired(context);
-        return;
+      } else {
+        ToastUtils.showError(context, e.message);
       }
-      LogHelper.e('Erro ao enviar papeletas diárias', e);
-      ToastUtils.showError(context, 'Erro ao enviar papeletas');
+      LogHelper.e('PapeletasDiarias: erro ao enviar', e);
     } catch (e) {
-      LogHelper.e('Erro ao enviar papeletas diárias', e);
+      ToastUtils.showError(context, 'Erro ao enviar papeletas');
+      LogHelper.e('PapeletasDiarias: erro ao enviar', e);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Widget _buildDatePill() {
-    final parts = _startDate.split('-');
-    final label = parts.length == 3
-        ? '${parts[2]}/${parts[1]}/${parts[0]}'
-        : _startDate;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.green,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.calendar_today, color: AppColors.white, size: 16),
-          const SizedBox(width: 8),
-          Text(
-            'Papeleta Diária - $label',
-            style: const TextStyle(
-                color: AppColors.white, fontWeight: FontWeight.bold),
+  void _openDepartmentDialog() async {
+    final temp = <String>{..._selectedDepartments};
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Selecione os departamentos'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: _departments.map((d) {
+              return StatefulBuilder(
+                builder: (c, setInner) => CheckboxListTile(
+                  title: Text('${d.id} - ${d.label}'),
+                  value: temp.contains(d.id),
+                  onChanged: (v) => setInner(() {
+                    if (v == true) temp.add(d.id); else temp.remove(d.id);
+                  }),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () {
+              setState(() => _selectedDepartments
+                ..clear()
+                ..addAll(temp));
+              Navigator.pop(ctx);
+            },
+            child: const Text('OK'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterBar() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(child: _buildDatePill()),
-        const SizedBox(height: 8),
-        Row(
+  int get _selectedCount => _items.where((e) => e.checkbox).length;
+
+  @override
+  Widget build(BuildContext context) {
+    final isTomorrow = _currentDate != _today;
+    final nextDay = _fromApi(_currentDate).add(const Duration(days: 1));
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFEDEFF2),
+      body: SafeArea(
+        top: false,
+        child: Column(
           children: [
+            _buildHeader(isTomorrow, nextDay),
             Expanded(
-              child: _buildDropdown<String>(
-                value: _type,
-                hint: 'Tipo',
-                items: const [
-                  DropdownMenuItem(
-                      value: Constants.tipoComum, child: Text('Comum')),
-                  DropdownMenuItem(
-                      value: Constants.tipoPromocional,
-                      child: Text('Promocional')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _type = v);
-                  _loadSigns();
-                },
-              ),
+              child: _isLoading && _items.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildBody(),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDropdown<String>(
-                value: _department,
-                hint: 'Departamento',
-                items: _supplyTypes
-                    .map((s) => DropdownMenuItem(
-                        value: s.id, child: Text(s.label)))
-                    .toList(),
-                onChanged: (v) {
-                  setState(() => _department = v);
-                  _loadSigns();
-                },
-              ),
-            ),
+            _buildBottomBar(),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDropdown<String>(
-                value: _size,
-                hint: 'Tamanho',
-                items: _sizes
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (v) {
-                  setState(() => _size = v);
-                  _loadSigns();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDropdown<String>(
-                value: _status,
-                hint: 'Status',
-                items: const [
-                  DropdownMenuItem(
-                      value: Constants.statusImpressas,
-                      child: Text('IMPRESSAS')),
-                  DropdownMenuItem(
-                      value: Constants.statusNaoImpressas,
-                      child: Text('NAO IMPRESSAS')),
-                  DropdownMenuItem(
-                      value: Constants.statusAll, child: Text('TODAS')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _status = v);
-                  _loadSigns();
-                },
-              ),
-            ),
-          ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(bool isTomorrow, DateTime nextDay) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 36, 16, 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryDark],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _eanController,
-                decoration: const InputDecoration(
-                  labelText: 'Buscar por EAN',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'PAPELETAS DIÁRIAS',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: isTomorrow
+                      ? () {
+                          _currentDate = _today;
+                          _loadSigns();
+                        }
+                      : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isTomorrow ? Colors.white : AppColors.accent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Hoje ${_toDisplay(_today)}',
+                        style: TextStyle(
+                          color: isTomorrow ? Colors.black87 : Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                keyboardType: TextInputType.number,
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: _onNextDay,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isTomorrow ? AppColors.accent : Colors.blue,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Amanhã ${_toDisplay(_toApi(nextDay))}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _addStandalone,
-              child: const Text('Buscar'),
+            child: Row(
+              children: [
+                _statCell('NÃO IMPRESSA', _naoImpressas, AppColors.red),
+                _divider(),
+                _statCell('IMPRESSA', _impressas, AppColors.green),
+                _divider(),
+                _statCell('TOTAL', _total, Colors.blue),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCell(String label, int value, Color color) => Expanded(
+        child: Column(
+          children: [
+            Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            const SizedBox(height: 4),
+            Text(value.toString(),
+                style: TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold, color: color)),
           ],
         ),
+      );
+
+  Widget _divider() =>
+      Container(width: 1, height: 28, color: Colors.grey[300]);
+
+  Widget _buildBody() {
+    return ListView(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(12),
+      children: [
+        _buildFilters(),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Checkbox(
+              value: _items.isNotEmpty && _items.every((e) => e.checkbox),
+              onChanged: _onSelectAll,
+            ),
+            const Text('Selecionar todos'),
+            const Spacer(),
+            Text('($_selectedCount) selecionados'),
+          ],
+        ),
+        if (_currentDate != _today)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber),
+            ),
+            child: const Text(
+              'Atenção: A impressão será efetuada para o dia seguinte.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        if (_items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Center(child: Text('Nenhuma papeleta encontrada')),
+          )
+        else
+          ..._items.map((it) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: PapeletaDiariaCard(
+                  item: it,
+                  onChangedCheckbox: (v) => _onItemCheck(it, v),
+                  onChangedQuantity: (q) => _onItemQty(it, q),
+                ),
+              )),
       ],
     );
   }
 
-  Widget _buildDropdown<T>({
-    required T? value,
-    required String hint,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      hint: Text(hint),
-      isExpanded: true,
-      decoration: const InputDecoration(
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  Widget _buildFilters() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      items: items,
-      onChanged: onChanged,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _dropdown(
+                  value: _movementPos,
+                  items: _movementOptions
+                      .asMap()
+                      .entries
+                      .map((e) => DropdownMenuItem(
+                            value: e.key, child: Text(e.value)))
+                      .toList(),
+                  onChanged: (v) {
+                    setState(() {
+                      _movementPos = v ?? 0;
+                      _selectedMovement = _movementPos == 0
+                          ? ''
+                          : _movementOptions[_movementPos];
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _dropdown(
+                  value: _typePos,
+                  items: _typeOptions
+                      .asMap()
+                      .entries
+                      .map((e) => DropdownMenuItem(
+                            value: e.key, child: Text(e.value)))
+                      .toList(),
+                  onChanged: (v) {
+                    setState(() {
+                      _typePos = v ?? 0;
+                      _selectedType = _typePos == 0
+                          ? Constants.signTypePapeletaComum
+                          : Constants.signTypePapeletaPromocional;
+                      _usarModeloPersonalizado = _typePos == 2;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _dropdown(
+                  value: _sizes.contains(_selectedSize) ? _selectedSize : null,
+                  hint: 'Tamanho',
+                  items: _sizes
+                      .map((s) =>
+                          DropdownMenuItem(value: s, child: Text(s)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => _selectedSize = v ?? '2X1'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _dropdown(
+                  value: _statusPos,
+                  items: _statusOptions
+                      .asMap()
+                      .entries
+                      .map((e) => DropdownMenuItem(
+                            value: e.key, child: Text(e.value)))
+                      .toList(),
+                  onChanged: (v) {
+                    setState(() => _statusPos = v ?? 0);
+                    _selectedStatus = [
+                      Constants.statusAll,
+                      Constants.statusImpressas,
+                      Constants.statusNaoImpressas
+                    ][_statusPos];
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: _openDepartmentDialog,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _selectedDepartments.isEmpty
+                          ? 'Departamentos'
+                          : '${_selectedDepartments.length} selecionado(s)',
+                      style: TextStyle(
+                        color: _selectedDepartments.isEmpty
+                            ? Colors.grey[600]
+                            : Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: _loadSigns,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('BUSCAR'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dropdown(
+      {dynamic value,
+      String? hint,
+      required List<DropdownMenuItem<dynamic>> items,
+      required void Function(dynamic) onChanged}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<dynamic>(
+          isExpanded: true,
+          value: value,
+          hint: hint != null ? Text(hint) : null,
+          items: items,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      color: Colors.white,
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: _onPrint,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          child: const Text('IMPRIMIR PAPELETAS'),
+        ),
+      ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Papeleta Diária'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.white,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: _buildFilterBar(),
-          ),
-          Expanded(
-            child: _loading && _items.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                    ? const Center(
-                        child: Text('Nenhuma papeleta encontrada'))
-                    : ListView.separated(
-                        itemCount: _items.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        itemBuilder: (context, index) {
-                          final item = _items[index];
-                          return PapeletaDiariaCard(
-                            key: ValueKey(item.id),
-                            item: item,
-                            onChangedCheckbox: (v) {
-                              setState(() => item.checkbox = v ?? false);
-                              _persist();
-                            },
-                            onChangedQuantity: (v) {
-                              setState(() => item.quantity = v);
-                              _persist();
-                            },
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          border: Border(top: BorderSide(color: AppColors.cardBorder)),
-        ),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-          ),
-          onPressed: _send,
-          child: const Text('ENVIAR PARA IMPRESSORA'),
-        ),
-      ),
-    );
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 }
-
-

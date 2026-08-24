@@ -286,6 +286,53 @@ class PrintingData {
         'takeAndWinPrice': takeAndWinPrice,
         'takeAndWinPercent': takeAndWinPercent,
       };
+
+  PrintingData copyWith({
+    String? ean,
+    String? description,
+    String? department,
+    double? displayPrice,
+    PriceInfo? price,
+    PromotionalPriceInfo? promotionalPrice,
+    int? quantity,
+    String? movementType,
+    String? unit,
+    double? unitQty,
+    double? unitValue,
+    bool? printUnitValue,
+    String? codSap,
+    TakeAndWin? takeAndWin,
+    String? referenceDate,
+    String? template,
+    String? productName,
+    double? promotionPrice,
+    int? takeAndWinQuantity,
+    double? takeAndWinPrice,
+    int? takeAndWinPercent,
+  }) =>
+      PrintingData(
+        ean: ean ?? this.ean,
+        description: description ?? this.description,
+        department: department ?? this.department,
+        displayPrice: displayPrice ?? this.displayPrice,
+        price: price ?? this.price,
+        promotionalPrice: promotionalPrice ?? this.promotionalPrice,
+        quantity: quantity ?? this.quantity,
+        movementType: movementType ?? this.movementType,
+        unit: unit ?? this.unit,
+        unitQty: unitQty ?? this.unitQty,
+        unitValue: unitValue ?? this.unitValue,
+        printUnitValue: printUnitValue ?? this.printUnitValue,
+        codSap: codSap ?? this.codSap,
+        takeAndWin: takeAndWin ?? this.takeAndWin,
+        referenceDate: referenceDate ?? this.referenceDate,
+        template: template ?? this.template,
+        productName: productName ?? this.productName,
+        promotionPrice: promotionPrice ?? this.promotionPrice,
+        takeAndWinQuantity: takeAndWinQuantity ?? this.takeAndWinQuantity,
+        takeAndWinPrice: takeAndWinPrice ?? this.takeAndWinPrice,
+        takeAndWinPercent: takeAndWinPercent ?? this.takeAndWinPercent,
+      );
 }
 
 class PriceInfo {
@@ -552,6 +599,41 @@ class PapeletaPrintingData {
         'quantity': quantity,
         'unit': unit,
       };
+
+  PapeletaPrintingData copyWith({
+    String? template,
+    String? productName,
+    double? price,
+    double? promotionPrice,
+    int? takeAndWinQuantity,
+    double? takeAndWinPrice,
+    int? takeAndWinPercent,
+    double? installmentPrice,
+    int? installmentQuantity,
+    String? codSap,
+    String? ean,
+    String? referenceDate,
+    String? size,
+    int? quantity,
+    String? unit,
+  }) =>
+      PapeletaPrintingData(
+        template: template ?? this.template,
+        productName: productName ?? this.productName,
+        price: price ?? this.price,
+        promotionPrice: promotionPrice ?? this.promotionPrice,
+        takeAndWinQuantity: takeAndWinQuantity ?? this.takeAndWinQuantity,
+        takeAndWinPrice: takeAndWinPrice ?? this.takeAndWinPrice,
+        takeAndWinPercent: takeAndWinPercent ?? this.takeAndWinPercent,
+        installmentPrice: installmentPrice ?? this.installmentPrice,
+        installmentQuantity: installmentQuantity ?? this.installmentQuantity,
+        codSap: codSap ?? this.codSap,
+        ean: ean ?? this.ean,
+        referenceDate: referenceDate ?? this.referenceDate,
+        size: size ?? this.size,
+        quantity: quantity ?? this.quantity,
+        unit: unit ?? this.unit,
+      );
 }
 
 class SendPriceSignRequest {

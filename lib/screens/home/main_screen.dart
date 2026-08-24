@@ -78,15 +78,6 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  Future<void> _abrirScanner() async {
-    final result = await Navigator.pushNamed(context, '/barcode');
-    if (result != null && result is String && result.isNotEmpty) {
-      if (mounted) {
-        Navigator.pushNamed(context, '/etiquetas', arguments: result);
-      }
-    }
-  }
-
   Future<bool> _onWillPop() async {
     if (_menuOpen) {
       setState(() => _menuOpen = false);
@@ -254,13 +245,6 @@ class _MainScreenState extends State<MainScreen> {
       onWillPop: _onWillPop,
       child: Scaffold(
         backgroundColor: const Color(0xFFF4F6F8),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: const Color(0xFFD32F2F),
-          foregroundColor: Colors.white,
-          onPressed: _abrirScanner,
-          child: Image.asset('assets/icons/ic_scanner.png',
-              width: 24, height: 24, color: Colors.white),
-        ),
         body: GestureDetector(
           onHorizontalDragEnd: (details) {
             if (details.primaryVelocity == null) return;
@@ -274,7 +258,10 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               Column(
                 children: [
-                  _buildHeader(),
+                  SafeArea(
+                    top: true,
+                    child: _buildHeader(),
+                  ),
                   Expanded(
                     child: _currentBody == 0
                         ? const EtiquetasFragment()
