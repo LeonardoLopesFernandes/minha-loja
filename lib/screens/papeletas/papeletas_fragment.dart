@@ -92,13 +92,16 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
 
   // ---- Helpers (espelho do Kotlin) ----
   bool get _usarMisto => _modelo == 'Misto';
-  bool get _usarModeloEditavel =>
-      _modelo == 'Promocional' || _modelo == 'Promocional Editável';
-  bool get _usarComumEditavel =>
-      _modelo == 'Comum' || _modelo == 'Comum Editável';
+  bool get _usarModeloEditavel => _modelo == 'Promocional Editável';
+  bool get _usarComumEditavel => _modelo == 'Comum Editável';
   bool get _usarVencimentos => _modelo == 'Vencimentos';
   bool get _isModoEditavel =>
       _modelo == 'Promocional Editável' || _modelo == 'Comum Editável';
+  // Misto/Promocional Editável/Vencimentos abrem a tela de preview (envio via
+  // socket); Comum Editável envia direto via API (sem preview); Promocional e
+  // Comum (simples) também enviam direto via API.
+  bool get _abrePreview =>
+      _usarMisto || _usarModeloEditavel || _usarVencimentos;
 
   static int _maxItens(String size) {
     switch (size) {
@@ -235,11 +238,8 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     }
     final tamanhoAtual = _size;
 
-    if (_usarComumEditavel && !_isModoEditavel) {
-      if (!_isItemComum(item)) {
-        ToastUtils.show(context, 'Esta papeleta não é do tipo Comum');
-        return;
-      }
+    // Comum Editável → envio direto via API (fiel ao MLoja).
+    if (_usarComumEditavel) {
       final list = List.generate(
           qty,
           (_) => _ajustarDadosLeveGanhe(
@@ -250,6 +250,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       return;
     }
 
+    // Promocional Editável em item comum → bloquear (fiel ao MLoja).
     if (_usarModeloEditavel && _isItemComum(item)) {
       ToastUtils.show(context, 'Esta papeleta é do tipo Comum, selecione o modo Comum');
       return;
@@ -263,7 +264,17 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
               quantity: 1,
               size: tamanhoAtual,
             )));
-    await _openPreview(lista, itemToRemove: item);
+
+    // Misto / Vencimentos / Promocional Editável (não comum) → preview → socket.
+    if (_abrePreview) {
+      await _openPreview(lista, itemToRemove: item);
+      return;
+    }
+
+    // Promocional (simples) e Comum (simples) → envio direto via API.
+    await _send(lista);
+    setState(() => _items.removeWhere((e) => e.id == item.id));
+    await _persist();
   }
 
   Future<void> _imprimirTodas() async {
@@ -296,13 +307,29 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       return;
     }
 
-    if (_usarComumEditavel && !_isModoEditavel) {
+    // Comum Editável → envio direto via API.
+    if (_usarComumEditavel) {
       await _send(lista);
       setState(() => _items.clear());
       await _persist();
       return;
     }
-    await _openPreview(lista, clearAll: true);
+
+    // Misto / Vencimentos / Promocional Editável → preview → socket.
+    if (_abrePreview) {
+      if (_usarModeloEditavel && _items.any((i) => _isItemComum(i))) {
+        ToastUtils.show(context,
+            'Existem papeletas do tipo Comum na lista, selecione o modo Comum');
+        return;
+      }
+      await _openPreview(lista, clearAll: true);
+      return;
+    }
+
+    // Promocional (simples) e Comum (simples) → envio direto via API.
+    await _send(lista);
+    setState(() => _items.clear());
+    await _persist();
   }
 
   Future<void> _send(List<PapeletaPrintingData> lista) async {
@@ -338,8 +365,8 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     final modoEditavel =
         _usarModeloEditavel || _usarComumEditavel || _usarVencimentos;
     final modoVencimentos = _usarVencimentos;
-    final semOverlay = _usarComumEditavel;
-    final hideGerarPreview = _usarModeloEditavel || _usarComumEditavel;
+    final semOverlay = false;
+    final hideGerarPreview = !_usarMisto;
     final result = await Navigator.pushNamed(context, '/modelo_editavel',
         arguments: {
           'items': lista,

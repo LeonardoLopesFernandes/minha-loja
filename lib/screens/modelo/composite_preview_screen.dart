@@ -189,11 +189,10 @@ Future<List<Uint8List>> buildCompositePages({
   for (int p = 0; p < pageCount; p++) {
     final ovW = overlay?.width ?? 850;
     final ovH = overlay?.height ?? 1200;
-    final base = img.Image(width: ovW, height: ovH);
+    final base = img.Image(ovW, ovH,
+        numChannels: 4, format: img.Format.uint8, fill: 0xFFFFFFFF);
     if (overlay != null) {
-      base.drawImage(overlay);
-    } else {
-      img.fill(base, color: img.ColorRgba8(255, 255, 255, 255));
+      img.compositeImage(base, overlay);
     }
     final halfW = (ovW / cols).floor();
     final halfH = (ovH / rows).floor();
@@ -210,14 +209,6 @@ Future<List<Uint8List>> buildCompositePages({
         final raster = await _rasterizeCard(
             api, item, halfW, halfH, validade, modoVencimentos);
         if (raster != null) {
-          if (_ehComum(item) && overlay != null) {
-            img.fillRect(base,
-                x1: left,
-                y1: top,
-                x2: left + halfW,
-                y2: top + halfH,
-                color: img.ColorRgba8(255, 255, 255, 255));
-          }
           img.compositeImage(base, raster, dstX: left, dstY: top);
         }
       } catch (e) {
@@ -263,7 +254,7 @@ Future<img.Image?> _rasterizeCard(ApiService api, PapeletaPrintingData data,
 /// RÁPIDO" sobre a papeleta, espelhando o desenharValidadeCard do Kotlin.
 Future<img.Image> _drawVencimento(
     img.Image raster, String validade, int w, int h) async {
-  final uiImg = await decodeImageFromList(img.encodePng(raster));
+  final uiImg = await ui.decodeImageFromList(img.encodePng(raster));
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(
       recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));

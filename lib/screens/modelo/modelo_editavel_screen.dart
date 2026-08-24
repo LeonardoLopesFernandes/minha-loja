@@ -246,9 +246,9 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
       doc.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(14),
+          margin: const pw.EdgeInsets.all(14.0),
           build: (context) => pw.Center(
-            child: pw.Image(pw.MemoryImage(png), fit: pw.BoxFit.contain),
+            child: pw.Image(pw.MemoryImage(png)),
           ),
         ),
       );
