@@ -53,9 +53,17 @@ jobs:
       - name: Build APK (arm64-v8a only)
         run: flutter build apk --release --target-platform=android-arm64 --dart-define=CLIENT_SECRET=${{ secrets.CLIENT_SECRET }}
 
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        continue-on-error: true
         with:
+          tag_name: build-${{ github.run_number }}
           generate_release_notes: true
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
