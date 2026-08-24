@@ -1,0 +1,33 @@
+name: minhaloja
+description: "Port fiel do app Android MLoja para Flutter."
+publish_to: 'none'
+
+version: 1.1.0+2
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  dio: ^5.4.0
+  shared_preferences: ^2.2.2
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  webview_flutter: ^4.4.2
+  mobile_scanner: ^4.0.0
+  provider: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
