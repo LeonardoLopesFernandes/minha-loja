@@ -345,7 +345,21 @@ Future<img.Image?> _rasterizeCard(
   try {
     if (doc.pageCount < 1) return null;
     final page = await doc.getPage(1);
-    final pi = await page.render(width: w, height: h);
+    // O PdfRenderer do Android (usado no MLoja) renderiza a página preservando
+    // a proporção (letterbox). O pdf_render, por padrão, aplica escalas X/Y
+    // independentes e ESTICA o conteúdo para preencher o destino, o que
+    // distorce/exagera o conteúdo quando a proporção da célula difere da do
+    // PDF (ex.: 4X1/6X1). Forçamos uma escala uniforme (contain) via
+    // fullWidth/fullHeight, idêntico ao comportamento do Android.
+    final pw = page.width;
+    final ph = page.height;
+    final scale = (pw <= 0 || ph <= 0) ? 1.0 : (w / pw < h / ph ? w / pw : h / ph);
+    final pi = await page.render(
+      width: w,
+      height: h,
+      fullWidth: pw * scale,
+      fullHeight: ph * scale,
+    );
     final raster = img.Image.fromBytes(
         width: pi.width,
         height: pi.height,
