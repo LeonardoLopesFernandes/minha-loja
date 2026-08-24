@@ -61,7 +61,7 @@ class MainActivity : FlutterActivity() {
                 if (scaleD < 1.0) scaleD = 1.0
                 val sInt = scaleD.toInt()
                 var rw = (pw * sInt).toInt().coerceAtMost(7200)
-                val rh = (ph * sInt).toInt()
+                val rh = (ph * rw / pw).toInt()
                 val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                 val pixels = IntArray(rw * rh)
