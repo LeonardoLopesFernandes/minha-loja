@@ -292,8 +292,10 @@ void _removerBrancoSuave(img.Image src) {
   }
 }
 
-/// Equivalente ao centralizarConteudo do Kotlin: detecta os limites horizontais
-/// do conteúdo não-branco e o desenha centralizado (com deslocamento) na célula.
+/// Equivalente ao desenharComProporcao/centralizarConteudo do Kotlin: aplica
+/// escala UNIFORME (preserva proporção, igual ao min(cellW/w, cellH/h) do
+/// Android) e centraliza o conteúdo não-branco dentro da célula. Evita a
+/// distorção que ocorria ao esticar o bitmap para cellW x cellH.
 void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
     int left, int top, double maxShiftFrac, double ignorarBordasFrac, double shiftYFrac) {
   final w = bmp.width;
@@ -309,29 +311,47 @@ void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
   final by1 = (sh * (1 - ignorarBordasFrac)).round();
   int minX = sw;
   int maxX = -1;
+  int minY = sh;
+  int maxY = -1;
   for (int y = by0; y < by1; y += 2) {
     for (int x = bx0; x < bx1; x += 2) {
       final p = small.getPixel(x, y);
       if (p.a > 8 && (p.r < 250 || p.g < 250 || p.b < 250)) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
       }
     }
   }
-  int dstX;
-  if (maxX <= minX) {
-    dstX = left;
+
+  // Escala uniforme (contain) — fiel ao desenharComProporcao do Kotlin.
+  final scale = (cellW / w < cellH / h) ? (cellW / w) : (cellH / h);
+  final dw = w * scale;
+  final dh = h * scale;
+  final dlBase = left + ((cellW - dw) / 2);
+  final dtBase = top - cellH * shiftYFrac + ((cellH - dh) / 2);
+
+  late int dstX;
+  late int dstY;
+  if (maxX <= minX || maxY <= minY) {
+    dstX = dlBase.round();
+    dstY = dtBase.round();
   } else {
-    final scaleX = cellW / sw;
-    final contentDrawW = (maxX - minX + 1) * scaleX;
-    double dx = ((cellW - contentDrawW) / 2 - minX * scaleX);
-    dx = dx.clamp(-cellW * maxShiftFrac, cellW * maxShiftFrac);
-    dstX = (left + dx).round();
+    final scaleX = dw / sw;
+    final scaleY = dh / sh;
+    final contentW = (maxX - minX + 1) * scaleX;
+    final contentH = (maxY - minY + 1) * scaleY;
+    final dx = (((dw - contentW) / 2) - minX * scaleX)
+        .clamp(-dw * maxShiftFrac, dw * maxShiftFrac);
+    final dy = (((dh - contentH) / 2) - minY * scaleY)
+        .clamp(-dh * maxShiftFrac, dh * maxShiftFrac);
+    dstX = (dlBase + dx).round();
+    dstY = (dtBase + dy).round();
   }
-  final dstY = (top - cellH * shiftYFrac).round();
-  final dstH = (cellH - 2 * cellH * shiftYFrac).round();
+
   img.compositeImage(base, bmp,
-      dstX: dstX, dstY: dstY, dstW: cellW, dstH: dstH);
+      dstX: dstX, dstY: dstY, dstW: dw.round(), dstH: dh.round());
 }
 
 Future<img.Image?> _rasterizeCard(
