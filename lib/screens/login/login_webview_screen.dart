@@ -108,7 +108,8 @@ class _LoginWebViewScreenState extends State<LoginWebViewScreen> {
     }
 
     try {
-      final cookies = await WebViewCookieManager().getCookies(domain: 'americanas.io');
+      final cookies = await WebViewCookieManager().getCookies(
+          domain: Uri.parse('https://minhaloja.americanas.io'));
       for (final c in cookies) {
         if ((c.name == 'newToken' || c.name == 'token') &&
             (c.value?.length ?? 0) > 50) {
