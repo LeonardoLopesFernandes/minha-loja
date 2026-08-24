@@ -10,15 +10,36 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Accept Android licenses
+        run: yes | flutter doctor --android-licenses || true
+
+      - name: Build APK
+        run: flutter build apk --release --dart-define=CLIENT_SECRET=${{ secrets.CLIENT_SECRET }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
