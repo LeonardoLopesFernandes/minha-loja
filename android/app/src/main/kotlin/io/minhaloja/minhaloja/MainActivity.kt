@@ -54,13 +54,14 @@ class MainActivity : FlutterActivity() {
             renderer.openPage(0).use { page ->
                 val pw = page.width.toDouble()
                 val ph = page.height.toDouble()
-                val scale = kotlin.math.minOf(
-                    kotlin.math.ceil(targetW / pw),
-                    kotlin.math.ceil(targetH / ph),
-                    8.0
-                ).coerceAtLeast(1.0).toInt()
-                var rw = (pw * scale).toInt().coerceAtMost(7200)
-                val rh = (ph * scale).toInt()
+                val s1 = kotlin.math.ceil(targetW / pw)
+                val s2 = kotlin.math.ceil(targetH / ph)
+                var scaleD = if (s1 < s2) s1 else s2
+                if (scaleD > 8.0) scaleD = 8.0
+                if (scaleD < 1.0) scaleD = 1.0
+                val sInt = scaleD.toInt()
+                var rw = (pw * sInt).toInt().coerceAtMost(7200)
+                val rh = (ph * sInt).toInt()
                 val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
                 val pixels = IntArray(rw * rh)
