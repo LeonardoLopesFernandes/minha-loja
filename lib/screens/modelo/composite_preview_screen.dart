@@ -189,8 +189,8 @@ Future<List<Uint8List>> buildCompositePages({
   for (int p = 0; p < pageCount; p++) {
     final ovW = overlay?.width ?? 850;
     final ovH = overlay?.height ?? 1200;
-    final base = img.Image(ovW, ovH,
-        numChannels: 4, format: img.Format.uint8, fill: 0xFFFFFFFF);
+    final base = img.Image(width: ovW, height: ovH,
+        numChannels: 4, format: img.Format.uint8);
     if (overlay != null) {
       img.compositeImage(base, overlay);
     }
@@ -230,21 +230,16 @@ Future<img.Image?> _rasterizeCard(ApiService api, PapeletaPrintingData data,
   final doc = await PdfDocument.openData(bytes);
   try {
     if (doc.pageCount < 1) return null;
-    final page = await doc.loadPage(1);
-    try {
-      final pi = await page.render(width: w, height: h);
-      final png = pi.bytes;
-      final raster = img.decodeImage(png);
-      if (raster == null) return null;
-      if (modoVencimentos &&
-          validade != null &&
-          validade.trim().isNotEmpty) {
-        return await _drawVencimento(raster, validade.trim(), w, h);
-      }
-      return raster;
-    } finally {
-      page.dispose();
+    final page = await doc.getPage(1);
+    final pi = await page.render(width: w, height: h);
+    final raster = img.Image.fromBytes(
+        width: pi.width, height: pi.height, bytes: pi.pixels.buffer, format: img.Format.uint8);
+    if (modoVencimentos &&
+        validade != null &&
+        validade.trim().isNotEmpty) {
+      return await _drawVencimento(raster, validade.trim(), w, h);
     }
+    return raster;
   } finally {
     doc.dispose();
   }
@@ -254,7 +249,7 @@ Future<img.Image?> _rasterizeCard(ApiService api, PapeletaPrintingData data,
 /// RÁPIDO" sobre a papeleta, espelhando o desenharValidadeCard do Kotlin.
 Future<img.Image> _drawVencimento(
     img.Image raster, String validade, int w, int h) async {
-  final uiImg = await ui.decodeImageFromList(img.encodePng(raster));
+  final uiImg = await decodeImageFromList(img.encodePng(raster));
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(
       recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));

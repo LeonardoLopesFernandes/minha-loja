@@ -19,18 +19,7 @@ import 'package:minhaloja/widgets/cards.dart';
     return '$y-$m-$day';
   }
 
-  String get _baseHint {
-    switch (_buscaTipo) {
-      case 'EAN':
-        return 'Digite o EAN';
-      case 'SAP':
-        return 'Digite o SAP';
-      default:
-        return 'Buscar Por Descrição';
-    }
-  }
-
-PrintingData _toPrintingData(SingleLabelPrintingData d) => PrintingData(
+  PrintingData _toPrintingData(SingleLabelPrintingData d) => PrintingData(
       ean: d.ean,
       description: d.description,
       department: d.department,
@@ -89,6 +78,17 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
   String _eanHint = 'Digite o EAN';
   TextInputType _eanKeyboardType = TextInputType.number;
   String _printer = 'Zebra 1';
+
+  String get _baseHint {
+    switch (_buscaTipo) {
+      case 'EAN':
+        return 'Digite o EAN';
+      case 'SAP':
+        return 'Digite o SAP';
+      default:
+        return 'Buscar Por Descrição';
+    }
+  }
 
   @override
   void initState() {
