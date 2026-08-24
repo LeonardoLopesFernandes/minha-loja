@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show rootBundle, MethodChannel;
 import 'package:image/image.dart' as img;
 import 'package:minhaloja/core/constants.dart';
 import 'package:minhaloja/core/theme.dart';
@@ -341,6 +341,18 @@ Future<img.Image?> _rasterizeCard(
   // possui 6X1).
   final bytes =
       await api.previewPriceSign(data.copyWith(size: Constants.signSize1x1));
+
+  // Renderiza via PdfRenderer do Android (canal de plataforma), fiel ao MLoja.
+  // O pdf_render (Pdfium próprio) desenha a camada de widget de formulário por
+  // cima do conteúdo estático, duplicando textos/preços; o PdfRenderer do
+  // sistema com RENDER_MODE_FOR_PRINT não, igual ao app nativo.
+  final platformRaster = await _renderViaPlatform(bytes, w, h);
+  if (platformRaster != null) {
+    _removerBrancoSuave(platformRaster);
+    return platformRaster;
+  }
+
+  // Fallback: pdf_render.
   final doc = await PdfDocument.openData(bytes);
   try {
     if (doc.pageCount < 1) return null;
@@ -372,6 +384,32 @@ Future<img.Image?> _rasterizeCard(
     return raster;
   } finally {
     doc.dispose();
+  }
+}
+
+const _pdfChannel = MethodChannel('minhaloja/pdf');
+
+/// Renderiza o PDF da API usando o PdfRenderer do Android (igual ao MLoja),
+/// retornando o bitmap em RGBA. Retorna null se o canal não estiver disponível
+/// (ex.: fora do Android) para usar o fallback pdf_render.
+Future<img.Image?> _renderViaPlatform(Uint8List bytes, int w, int h) async {
+  try {
+    final res = await _pdfChannel.invokeMethod<Map<dynamic, dynamic>>(
+      'renderPdfToRgba',
+      {'bytes': bytes, 'w': w, 'h': h},
+    );
+    if (res == null) return null;
+    final rw = res['width'] as int;
+    final rh = res['height'] as int;
+    final data = res['bytes'] as Uint8List;
+    if (rw <= 0 || rh <= 0 || data.lengthInBytes < rw * rh * 4) return null;
+    return img.Image.fromBytes(
+        width: rw,
+        height: rh,
+        bytes: data.buffer,
+        format: img.Format.uint8);
+  } catch (_) {
+    return null;
   }
 }
 
