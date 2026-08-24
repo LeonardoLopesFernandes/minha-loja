@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "io.minhaloja.minhaloja"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "29.0.14206865"
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
