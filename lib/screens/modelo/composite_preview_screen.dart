@@ -12,9 +12,10 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:pdf_render/pdf_render.dart';
 
-/// Pré-visualização composta (grade) espelhando a ModeloEditavelActivity do
-/// MLoja: rasteriza o PDF de cada item via API e o sobrepõe sobre o overlay
-/// PNG correspondente ao tamanho, exatamente como o Kotlin faz com canvas.
+/// Pré-visualização composta espelhando fielmente a ModeloEditavelActivity do
+/// MLoja: o PDF de cada item é renderizado pela API, o branco é removido
+/// (removerBrancoSuave) e o conteúdo é centralizado (centralizarConteudo) sobre
+/// o overlay, exatamente como o Kotlin faz com canvas.
 class CompositePreviewScreen extends StatefulWidget {
   final List<PapeletaPrintingData> items;
   final String size;
@@ -190,17 +191,20 @@ Future<List<Uint8List>> buildCompositePages({
   final out = <Uint8List>[];
 
   for (int p = 0; p < pageCount; p++) {
-    final ovW = overlay?.width ?? 850;
-    final ovH = overlay?.height ?? 1200;
+    final ovW = overlay?.width ?? (cols > rows ? 1200 : 850);
+    final ovH = overlay?.height ?? (cols > rows ? 850 : 1200);
     final base = img.Image(width: ovW, height: ovH,
         numChannels: 4, format: img.Format.uint8);
-    if (overlay != null && !semOverlay) {
+    if (!semOverlay && overlay != null) {
       img.compositeImage(base, overlay);
     } else {
       img.fill(base, color: img.ColorRgb8(255, 255, 255));
     }
     final halfW = (ovW / cols).floor();
     final halfH = (ovH / rows).floor();
+
+    final shiftYVenc =
+        cols > rows ? 0.015 : (cols == 2 && rows == 2 ? 0.01 : 0.03);
 
     for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
       final item = items[idx];
@@ -209,15 +213,46 @@ Future<List<Uint8List>> buildCompositePages({
       final row = local ~/ cols;
       final left = col * halfW;
       final top = row * halfH;
+      final ehComum = _ehComum(item);
       final validade = validades.length > idx ? validades[idx] : null;
+
+      img.Image? raster;
       try {
-        final raster = await _rasterizeCard(
-            api, item, halfW, halfH, validade, modoVencimentos);
-        if (raster != null) {
-          img.compositeImage(base, raster, dstX: left, dstY: top);
-        }
+        raster = await _rasterizeCard(api, item, halfW, halfH);
       } catch (e) {
         LogHelper.e('Composite: erro item $idx', e);
+      }
+      if (raster == null) continue;
+
+      if (modoVencimentos &&
+          validade != null &&
+          validade.trim().isNotEmpty) {
+        raster = await _drawVencimento(raster, validade.trim(), halfW, halfH);
+      }
+
+      if (modoVencimentos) {
+        // Vencimentos: overlay é desenhado por célula (apenas não-comum).
+        if (!semOverlay && overlay != null && !ehComum) {
+          img.compositeImage(base, overlay,
+              dstX: left, dstY: top, dstW: halfW, dstH: halfH);
+          _centralizarConteudo(
+              base, raster, halfW, halfH, left, top, 0.35, 0.0, shiftYVenc);
+        } else {
+          if (!semOverlay && overlay != null) {
+            _fillCell(base, left, top, halfW, halfH);
+          }
+          _centralizarConteudo(
+              base, raster, halfW, halfH, left, top, 1.0, 0.03, 0.0);
+        }
+      } else {
+        // Multi: overlay cobre a página toda; comum recebe fundo branco.
+        if (ehComum && !semOverlay && overlay != null) {
+          _fillCell(base, left, top, halfW, halfH);
+        }
+        final ignorar = ehComum ? 0.03 : 0.0;
+        final shiftY = ehComum ? 0.0 : (cols > rows ? 0.015 : 0.03);
+        _centralizarConteudo(
+            base, raster, halfW, halfH, left, top, 1.0, ignorar, shiftY);
       }
     }
     out.add(img.encodePng(base));
@@ -225,8 +260,82 @@ Future<List<Uint8List>> buildCompositePages({
   return out;
 }
 
-Future<img.Image?> _rasterizeCard(ApiService api, PapeletaPrintingData data,
-    int w, int h, String? validade, bool modoVencimentos) async {
+/// Pinta um retângulo branco na célula (esconde o overlay, p/ itens comuns).
+void _fillCell(img.Image base, int left, int top, int w, int h) {
+  final white = img.Image(width: w, height: h, numChannels: 4, format: img.Format.uint8);
+  img.fill(white, color: img.ColorRgb8(255, 255, 255));
+  img.compositeImage(base, white, dstX: left, dstY: top, dstW: w, dstH: h);
+}
+
+/// Equivalente ao removerBrancoSuave do Kotlin: torna o branco suave
+/// transparente para que o overlay apareça através do conteúdo.
+void _removerBrancoSuave(img.Image src) {
+  for (int y = 0; y < src.height; y++) {
+    for (int x = 0; x < src.width; x++) {
+      final p = src.getPixel(x, y);
+      final a = p.a;
+      if (a < 200) continue;
+      final r = p.r;
+      final g = p.g;
+      final b = p.b;
+      final minRGB = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      if (minRGB >= 200) {
+        final t = ((minRGB - 200) / 55).clamp(0.0, 1.0);
+        final newA = (a * (1 - t * 0.95)).round().clamp(0, 255);
+        if (newA < 4) {
+          src.setPixelRgba(x, y, r, g, b, 0);
+        } else {
+          src.setPixelRgba(x, y, r, g, b, newA);
+        }
+      }
+    }
+  }
+}
+
+/// Equivalente ao centralizarConteudo do Kotlin: detecta os limites horizontais
+/// do conteúdo não-branco e o desenha centralizado (com deslocamento) na célula.
+void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
+    int left, int top, double maxShiftFrac, double ignorarBordasFrac, double shiftYFrac) {
+  final w = bmp.width;
+  final h = bmp.height;
+  final targetW = w < 800 ? w : 800;
+  final targetH = (h * targetW / w).round().clamp(1, 100000);
+  final small = (targetW < w) ? img.copyResize(bmp, width: targetW, height: targetH) : bmp;
+  final sw = small.width;
+  final sh = small.height;
+  final bx0 = (sw * ignorarBordasFrac).round();
+  final bx1 = (sw * (1 - ignorarBordasFrac)).round();
+  final by0 = (sh * ignorarBordasFrac).round();
+  final by1 = (sh * (1 - ignorarBordasFrac)).round();
+  int minX = sw;
+  int maxX = -1;
+  for (int y = by0; y < by1; y += 2) {
+    for (int x = bx0; x < bx1; x += 2) {
+      final p = small.getPixel(x, y);
+      if (p.a > 8 && (p.r < 250 || p.g < 250 || p.b < 250)) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
+    }
+  }
+  int dstX;
+  if (maxX <= minX) {
+    dstX = left;
+  } else {
+    final scaleX = cellW / sw;
+    final contentDrawW = (maxX - minX + 1) * scaleX;
+    double dx = ((cellW - contentDrawW) / 2 - minX * scaleX);
+    dx = dx.clamp(-cellW * maxShiftFrac, cellW * maxShiftFrac);
+    dstX = (left + dx).round();
+  }
+  final dstY = (top - cellH * shiftYFrac).round();
+  final dstH = (cellH - 2 * cellH * shiftYFrac).round();
+  img.compositeImage(base, bmp,
+      dstX: dstX, dstY: dstY, dstW: cellW, dstH: dstH);
+}
+
+Future<img.Image?> _rasterizeCard(
+    ApiService api, PapeletaPrintingData data, int w, int h) async {
   // O Kotlin sempre gera o PDF de cada célula em 1X1 e compõe a grade
   // conforme o tamanho selecionado (ex.: 3x2 para 6X1, já que a API não
   // possui 6X1).
@@ -238,12 +347,11 @@ Future<img.Image?> _rasterizeCard(ApiService api, PapeletaPrintingData data,
     final page = await doc.getPage(1);
     final pi = await page.render(width: w, height: h);
     final raster = img.Image.fromBytes(
-        width: pi.width, height: pi.height, bytes: pi.pixels.buffer, format: img.Format.uint8);
-    if (modoVencimentos &&
-        validade != null &&
-        validade.trim().isNotEmpty) {
-      return await _drawVencimento(raster, validade.trim(), w, h);
-    }
+        width: pi.width,
+        height: pi.height,
+        bytes: pi.pixels.buffer,
+        format: img.Format.uint8);
+    _removerBrancoSuave(raster);
     return raster;
   } finally {
     doc.dispose();
@@ -252,13 +360,13 @@ Future<img.Image?> _rasterizeCard(ApiService api, PapeletaPrintingData data,
 
 /// Desenha "VAL.: <data>" e o rodapé fixo "PRÓXIMO DA VALIDADE. CONSUMO
 /// RÁPIDO" sobre a papeleta, espelhando o desenharValidadeCard do Kotlin.
+/// Fundo transparente (não pinta branco) para compor sobre o overlay.
 Future<img.Image> _drawVencimento(
     img.Image raster, String validade, int w, int h) async {
   final uiImg = await decodeImageFromList(img.encodePng(raster));
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(
       recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));
-  canvas.drawColor(const ui.Color(0xFFFFFFFF), ui.BlendMode.srcOver);
   canvas.drawImageRect(
     uiImg,
     Rect.fromLTWH(0, 0, uiImg.width.toDouble(), uiImg.height.toDouble()),
