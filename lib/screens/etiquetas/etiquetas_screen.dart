@@ -8,6 +8,7 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
+import 'package:minhaloja/widgets/cards.dart';
 
 String _formatToday() {
   final d = DateTime.now();
@@ -17,14 +18,32 @@ String _formatToday() {
   return '$y-$m-$day';
 }
 
-PrintingData _toPrintingData(SingleLabelPrintingData d, int quantity) => PrintingData(
+PriceTag _singleToPriceTag(SingleLabelItem item) => PriceTag(
+      id: item.id,
+      sap: item.sap,
+      department: item.department,
+      ean: item.ean,
+      description: item.description,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      duration: item.duration,
+      price: item.price,
+      movement: item.movement,
+      status: item.status,
+      checkbox: false,
+      quantity: item.quantity,
+      printingData:
+          item.printingData != null ? _toPrintingData(item.printingData!) : null,
+    );
+
+PrintingData _toPrintingData(SingleLabelPrintingData d) => PrintingData(
       ean: d.ean,
       description: d.description,
       department: d.department,
       displayPrice: d.displayPrice,
       price: d.price,
       promotionalPrice: d.promotionalPrice,
-      quantity: quantity,
+      quantity: d.quantity,
       movementType: d.movementType,
       unit: d.unit,
       unitQty: d.unitQty,
@@ -51,7 +70,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
   late final String _today;
 
   String _searchType = 'ean';
-  List<SingleLabelItem> _items = [];
+  List<PriceTag> _items = [];
   bool _loading = false;
 
   @override
@@ -82,7 +101,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
         sapId: _searchType == 'sap' ? query : null,
         startDate: _today,
       );
-      setState(() => _items = resp.items);
+      setState(() => _items = resp.items.map(_singleToPriceTag).toList());
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
@@ -97,14 +116,12 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
     }
   }
 
-  void _changeQuantity(SingleLabelItem item, int delta) {
-    setState(() {
-      item.quantity = (item.quantity + delta).clamp(1, 9999);
-    });
-  }
-
   Future<void> _sendToPrinter() async {
-    if (_items.isEmpty) return;
+    final selected = _items.where((e) => e.checkbox).toList();
+    if (selected.isEmpty) {
+      ToastUtils.show(context, 'Selecione ao menos um item');
+      return;
+    }
     setState(() => _loading = true);
     try {
       final resp = await api.getPrinters(_storeId);
@@ -114,9 +131,9 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
         setState(() => _loading = false);
         return;
       }
-      final products = _items
-          .where((e) => e.printingData != null)
-          .map((e) => _toPrintingData(e.printingData!, e.quantity))
+      final products = selected
+          .map((e) => e.printingData)
+          .whereType<PrintingData>()
           .toList();
       if (products.isEmpty) {
         ToastUtils.showInfo(context, 'Nenhum dado de impressão disponível');
@@ -161,10 +178,8 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      p.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                    child: Text(p.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   ...p.tags.map(
                     (t) => ListTile(
@@ -191,46 +206,6 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
       ),
     );
   }
-
-  Widget _buildItemCard(SingleLabelItem item) => Card(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(color: AppColors.cardBorder),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.description,
-                style: AppTextStyles.title.copyWith(fontSize: 16),
-              ),
-              const SizedBox(height: 4),
-              Text('Departamento: ${item.department}'),
-              Text('EAN: ${item.ean}'),
-              Text('Preço: ${item.price}'),
-              Text('Movimento: ${item.movement}'),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Text('Qtd:'),
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle_outline),
-                    onPressed: () => _changeQuantity(item, -1),
-                  ),
-                  Text('${item.quantity}'),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    onPressed: () => _changeQuantity(item, 1),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
 
   @override
   Widget build(BuildContext context) {
@@ -285,8 +260,18 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
                 : _items.isEmpty
                     ? const Center(child: Text('Nenhuma etiqueta encontrada'))
                     : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                         itemCount: _items.length,
-                        itemBuilder: (_, i) => _buildItemCard(_items[i]),
+                        itemBuilder: (_, i) {
+                          final tag = _items[i];
+                          return PriceTagCard(
+                            tag: tag,
+                            onChangedCheckbox: (v) =>
+                                setState(() => tag.checkbox = v),
+                            onChangedQuantity: (q) =>
+                                setState(() => tag.quantity = q),
+                          );
+                        },
                       ),
           ),
         ],

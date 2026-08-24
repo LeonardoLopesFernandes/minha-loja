@@ -166,34 +166,36 @@ class _LoginWebViewScreenState extends State<LoginWebViewScreen> {
 
   Widget _buildPulsingLogo() {
     return Container(
-      color: AppColors.white,
+      color: const Color(0xFFD81B3A),
       child: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: 0.85, end: 1.1),
-          duration: const Duration(seconds: 1),
-          curve: Curves.easeInOut,
-          builder: (context, value, child) => Transform.scale(
-            scale: value,
-            child: child,
-          ),
-          child: Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: const Center(
-              child: Text(
-                'ML',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0.85, end: 1.1),
+              duration: const Duration(seconds: 1),
+              curve: Curves.easeInOut,
+              builder: (context, value, child) => Transform.scale(
+                scale: value,
+                child: child,
+              ),
+              child: Image.asset(
+                'assets/icons/logo_a_branco.png',
+                width: 140,
+                height: 140,
+                fit: BoxFit.contain,
               ),
             ),
-          ),
+            const SizedBox(height: 24),
+            const Text(
+              'Carregando credenciais...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
       ),
     );

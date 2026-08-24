@@ -121,23 +121,11 @@ class _LoginScreenState extends State<LoginScreen>
       scale: _logoScale,
       child: FadeTransition(
         opacity: _logoOpacity,
-        child: Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: const Center(
-            child: Text(
-              'ML',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+        child: Image.asset(
+          'assets/icons/minha_loja_logo.png',
+          width: 84,
+          height: 84,
+          fit: BoxFit.contain,
         ),
       ),
     );
@@ -146,133 +134,220 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.gray100,
+      backgroundColor: AppColors.primary,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildLogo(),
-                const SizedBox(height: 24),
-                if (_reconectando)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'Sessão expirada. Reconectando automaticamente...',
-                      textAlign: TextAlign.center,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Align(
+                alignment: const Alignment(0, 0.75),
+                child: Transform.scale(
+                  scale: 6.0,
+                  child: const Text(
+                    'a',
+                    style: TextStyle(
+                      fontSize: 320,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildLogo(),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'minha loja',
                       style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.gray900,
-                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  )
-                else if (_showForm)
-                  AnimatedOpacity(
-                    opacity: _showForm ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 600),
-                    child: _buildForm(),
-                  ),
-              ],
+                    const SizedBox(height: 6),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        'Para ter acesso ao portal, vamos manter os fluxos de '
+                        'autenticação segura.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    if (_reconectando)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Sessão expirada. Reconectando automaticamente...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                    else if (_showForm)
+                      AnimatedOpacity(
+                        opacity: _showForm ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 600),
+                        child: _buildForm(),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildForm() {
+    final inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+    );
     return Card(
-      elevation: 4,
+      color: Colors.white,
+      elevation: 8,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.cardBorder),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Minha Loja',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'E-mail',
+                style: TextStyle(
+                  color: Color(0xFF49454F),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 48,
+              child: TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  hintText: 'Email Microsoft',
+                  hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: inputBorder,
+                  enabledBorder: inputBorder,
+                  focusedBorder: inputBorder,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Senha',
+                style: TextStyle(
+                  color: Color(0xFF49454F),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 48,
+              child: TextField(
+                controller: _senhaController,
+                obscureText: !_mostrarSenha,
+                decoration: InputDecoration(
+                  hintText: 'Senha',
+                  hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: inputBorder,
+                  enabledBorder: inputBorder,
+                  focusedBorder: inputBorder,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _mostrarSenha
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      color: AppColors.gray900,
+                    ),
+                    onPressed: () =>
+                        setState(() => _mostrarSenha = !_mostrarSenha),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: 'E-mail',
-                prefixIcon: const Icon(Icons.email, color: AppColors.primary),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            SizedBox(
+              height: 52,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: _entrar,
+                child: const Text(
+                  'ENTRAR',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _senhaController,
-              obscureText: !_mostrarSenha,
-              decoration: InputDecoration(
-                labelText: 'Senha',
-                prefixIcon: const Icon(Icons.lock, color: AppColors.primary),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _mostrarSenha ? Icons.visibility : Icons.visibility_off,
-                    color: AppColors.gray900,
-                  ),
-                  onPressed: () =>
-                      setState(() => _mostrarSenha = !_mostrarSenha),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
             InkWell(
               onTap: () =>
                   setState(() => _salvarCredenciais = !_salvarCredenciais),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _salvarCredenciais
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      color: AppColors.primary,
+                    Checkbox(
+                      value: _salvarCredenciais,
+                      activeColor: Colors.white,
+                      checkColor: AppColors.primary,
+                      side: const BorderSide(color: Colors.white),
+                      onChanged: (v) =>
+                          setState(() => _salvarCredenciais = v ?? false),
                     ),
-                    const SizedBox(width: 8),
                     const Text(
-                      'Salvar credenciais',
-                      style: TextStyle(fontSize: 14),
+                      'Salvar credenciais e ativar login automático',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: _entrar,
-              child: const Text(
-                'ENTRAR',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
           ],

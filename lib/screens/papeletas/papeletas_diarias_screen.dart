@@ -9,6 +9,7 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
+import 'package:minhaloja/widgets/cards.dart';
 
 class PapeletasDiariasScreen extends StatefulWidget {
   const PapeletasDiariasScreen({super.key});
@@ -166,17 +167,6 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
       LogHelper.e('Erro ao buscar papeleta diária', e);
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  Future<void> _delete(PriceSign item) async {
-    setState(() {
-      _items.removeWhere((e) => e.id == item.id);
-    });
-    await ListaStore.instance.removePapeleta(item);
-  }
-
-  void _editModelo(PriceSign item) {
-    Navigator.pushNamed(context, '/modelo_editavel', arguments: item);
   }
 
   Future<void> _send() async {
@@ -391,7 +381,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         itemBuilder: (context, index) {
                           final item = _items[index];
-                          return _PapeletaDiariaCard(
+                          return PapeletaDiariaCard(
                             key: ValueKey(item.id),
                             item: item,
                             onChangedCheckbox: (v) {
@@ -402,8 +392,6 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
                               setState(() => item.quantity = v);
                               _persist();
                             },
-                            onEdit: () => _editModelo(item),
-                            onDelete: () => _delete(item),
                           );
                         },
                       ),
@@ -431,114 +419,4 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
   }
 }
 
-class _PapeletaDiariaCard extends StatelessWidget {
-  final PriceSign item;
-  final ValueChanged<bool?> onChangedCheckbox;
-  final ValueChanged<int> onChangedQuantity;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
 
-  const _PapeletaDiariaCard({
-    super.key,
-    required this.item,
-    required this.onChangedCheckbox,
-    required this.onChangedQuantity,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Dismissible(
-      key: Key('papeleta_diaria_${item.id}'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 16),
-        color: AppColors.primary,
-        child: const Icon(Icons.delete, color: AppColors.white),
-      ),
-      onDismissed: (_) => onDelete(),
-      child: Card(
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: AppColors.cardBorder),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Checkbox(
-                    value: item.checkbox,
-                    activeColor: AppColors.primary,
-                    onChanged: onChangedCheckbox,
-                  ),
-                  Expanded(
-                    child: Text(
-                      item.description.isNotEmpty
-                          ? item.description
-                          : 'Sem descrição',
-                      style: AppTextStyles.title,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: AppColors.primary),
-                    onPressed: onEdit,
-                    tooltip: 'Editar modelo',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text('Departamento: ${item.department}',
-                  style: AppTextStyles.subtitle),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text('Preço: ${item.price}', style: AppTextStyles.body),
-                  const SizedBox(width: 12),
-                  if (item.printingData?.promotionPrice != null)
-                    Text(
-                        'Promo: ${item.printingData!.promotionPrice}',
-                        style: const TextStyle(
-                            color: AppColors.green,
-                            fontWeight: FontWeight.bold)),
-                ],
-              ),
-              if (item.movement.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text('Movimento: ${item.movement}',
-                    style: AppTextStyles.subtitle),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle_outline),
-                    onPressed: () {
-                      if (item.quantity > 1) {
-                        onChangedQuantity(item.quantity - 1);
-                      }
-                    },
-                  ),
-                  Text('${item.quantity}', style: AppTextStyles.body),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    onPressed: () => onChangedQuantity(item.quantity + 1),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: onEdit,
-                    child: const Text('EDITAR MODELO'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

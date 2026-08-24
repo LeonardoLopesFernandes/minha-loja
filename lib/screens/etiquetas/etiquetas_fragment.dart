@@ -9,6 +9,7 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
+import 'package:minhaloja/widgets/cards.dart';
 
 String _formatToday() {
   final d = DateTime.now();
@@ -69,16 +70,14 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
   late final String _today;
 
   List<PriceTag> _tags = [];
-  List<Department> _departments = [];
-  InfoTag? _infoTag;
 
   String _status = Constants.statusAll;
-  String? _selectedDept;
 
   bool _loading = false;
   bool _loadingTags = false;
 
-  bool get _hasSelection => _tags.any((e) => e.checkbox);
+  final TextEditingController _eanController = TextEditingController();
+  String _buscaTipo = 'EAN';
 
   @override
   void initState() {
@@ -88,22 +87,16 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
     _loadInitial();
   }
 
+  @override
+  void dispose() {
+    _eanController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadInitial() async {
     setState(() => _loading = true);
     try {
       _tags = await ListaStore.instance.getEtiquetas();
-      final filters =
-          await api.getPriceTagFilters(_storeId, _today);
-      _departments = filters.departments;
-      try {
-        final menu = await api.getPriceTags(_storeId, _today);
-        _infoTag = menu.page.infoTag;
-      } on ApiException catch (e) {
-        if (e.statusCode == 401) {
-          SessionExpiredHandler.handleSessionExpired(context);
-          return;
-        }
-      }
       await _fetchServerTags();
     } catch (e) {
       LogHelper.e('EtiquetasFragment: erro ao carregar', e);
@@ -119,7 +112,6 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       final resp = await api.getPriceTagsByStatus(
         _storeId,
         _status,
-        department: _selectedDept,
         startDate: _today,
       );
       final map = <String, PriceTag>{for (final t in _tags) t.id: t};
@@ -147,21 +139,9 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
     await ListaStore.instance.saveEtiquetas(_tags);
   }
 
-  void _toggleCheckbox(PriceTag tag, bool value) {
-    setState(() => tag.checkbox = value);
-    _persist();
-  }
-
-  void _changeQuantity(PriceTag tag, int delta) {
-    setState(() {
-      tag.quantity = (tag.quantity + delta).clamp(1, 9999);
-    });
-    _persist();
-  }
-
-  Future<void> _deleteTag(PriceTag tag) async {
+  void _deleteTag(PriceTag tag) {
     setState(() => _tags.removeWhere((e) => e.id == tag.id));
-    await ListaStore.instance.removeEtiqueta(tag);
+    ListaStore.instance.removeEtiqueta(tag);
   }
 
   Future<void> _addByScan() async {
@@ -171,45 +151,17 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
     }
   }
 
-  Future<void> _showManualEanDialog() async {
-    final controller = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Adicionar etiqueta'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'EAN',
-            hintText: 'Digite o código de barras',
-          ),
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: const Text('Adicionar'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) await _fetchAndAdd(controller.text.trim());
-  }
-
   Future<void> _fetchAndAdd(String ean) async {
+    final code = ean.trim();
+    if (code.isEmpty) {
+      ToastUtils.show(context, 'Digite um código');
+      return;
+    }
     setState(() => _loading = true);
     try {
       final resp = await api.getSingleLabelByEan(
         _storeId,
-        ean: ean,
+        ean: code,
         startDate: _today,
       );
       if (resp.items.isEmpty) {
@@ -236,7 +188,10 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
 
   Future<void> _sendToPrinter() async {
     final selected = _tags.where((e) => e.checkbox).toList();
-    if (selected.isEmpty) return;
+    if (selected.isEmpty) {
+      ToastUtils.show(context, 'Selecione ao menos um item');
+      return;
+    }
     setState(() => _loading = true);
     try {
       final resp = await api.getPrinters(_storeId);
@@ -276,6 +231,48 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
     }
   }
 
+  Future<void> _imprimirItem(PriceTag tag) async {
+    setState(() => tag.checkbox = true);
+    await _sendToPrinter();
+  }
+
+  Future<void> _imprimirTodas() async {
+    if (_tags.isEmpty) {
+      ToastUtils.show(context, 'Nenhuma etiqueta para imprimir');
+      return;
+    }
+    for (final t in _tags) {
+      t.checkbox = true;
+    }
+    setState(() {});
+    await _sendToPrinter();
+  }
+
+  Future<void> _limparLista() async {
+    if (_tags.isEmpty) {
+      ToastUtils.show(context, 'Lista já está vazia');
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpar Lista'),
+        content: const Text('Tem certeza que deseja remover todos os itens?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      setState(() => _tags.clear());
+      await _persist();
+      ToastUtils.show(context, 'Lista limpa');
+    }
+  }
+
   Future<_PrinterChoice?> _showPrinterDialog(PrinterResponse resp) async {
     return showDialog<_PrinterChoice>(
       context: context,
@@ -293,10 +290,8 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      p.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                    child: Text(p.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                   ...p.tags.map(
                     (t) => ListTile(
@@ -324,169 +319,190 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
     );
   }
 
-  Widget _buildHeader() {
-    return Card(
-      margin: const EdgeInsets.all(8),
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: AppColors.cardBorder),
-        borderRadius: BorderRadius.circular(8),
+  Widget _spinnerBox({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_infoTag != null)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${_infoTag!.date.weekday} ${_infoTag!.date.day}',
-                      style: AppTextStyles.title,
-                    ),
-                  ),
-                  _infoChip('Impressas', _infoTag!.printedTags),
-                  const SizedBox(width: 8),
-                  _infoChip('Não impressas', _infoTag!.unprintedTags),
-                  const SizedBox(width: 8),
-                  _infoChip('Total', _infoTag!.totalTags),
-                ],
-              ),
-            const SizedBox(height: 8),
-            if (_departments.isNotEmpty)
-              SizedBox(
-                height: 40,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _deptChip('Todos', null, _selectedDept == null),
-                    ..._departments.map(
-                      (d) => _deptChip(d.label, d.id, _selectedDept == d.id),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _statusChip('Todas', Constants.statusAll),
-                  _statusChip('Impressas', Constants.statusImpressas),
-                  _statusChip('Não impressas', Constants.statusNaoImpressas),
-                ],
-              ),
-            ),
-          ],
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isExpanded: true,
+          value: value,
+          items: items
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .toList(),
+          onChanged: onChanged,
         ),
       ),
     );
   }
 
-  Widget _infoChip(String label, int value) => Chip(
-        label: Text('$label: $value'),
-        backgroundColor: AppColors.gray100,
-      );
-
-  Widget _deptChip(String label, String? id, bool selected) => Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: ChoiceChip(
-          label: Text(label),
-          selected: selected,
-          selectedColor: AppColors.primary,
-          labelStyle: TextStyle(
-            color: selected ? AppColors.white : AppColors.gray900,
-          ),
-          onSelected: (_) {
-            setState(() => _selectedDept = selected ? null : id);
-            _fetchServerTags();
-          },
-        ),
-      );
-
-  Widget _statusChip(String label, String value) => Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: ChoiceChip(
-          label: Text(label),
-          selected: _status == value,
-          selectedColor: AppColors.primary,
-          labelStyle: TextStyle(
-            color: _status == value ? AppColors.white : AppColors.gray900,
-          ),
-          onSelected: (_) {
-            setState(() => _status = value);
-            _fetchServerTags();
-          },
-        ),
-      );
-
-  Widget _buildCard(PriceTag tag) => Dismissible(
-        key: ValueKey(tag.id),
-        direction: DismissDirection.endToStart,
-        background: Container(
-          color: AppColors.primary,
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 16),
-          child: const Icon(Icons.delete, color: AppColors.white),
-        ),
-        onDismissed: (_) => _deleteTag(tag),
-        child: Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          shape: RoundedRectangleBorder(
-            side: const BorderSide(color: AppColors.cardBorder),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        tag.description,
-                        style: AppTextStyles.title.copyWith(fontSize: 16),
-                      ),
-                    ),
-                    Checkbox(
-                      value: tag.checkbox,
-                      activeColor: AppColors.primary,
-                      onChanged: (v) => _toggleCheckbox(tag, v ?? false),
-                    ),
-                  ],
+  Widget _buildFilterBar() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: _spinnerBox(
+                  value: 'Zebra 1',
+                  items: const ['Zebra 1', 'Zebra 2'],
+                  onChanged: (_) {},
                 ),
-                const SizedBox(height: 4),
-                Text('Departamento: ${tag.department}'),
-                Text('EAN: ${tag.ean}'),
-                Text('Preço: ${tag.price}'),
-                Text('Movimento: ${tag.movement}'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Text('Qtd:'),
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: () => _changeQuantity(tag, -1),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _spinnerBox(
+                  value: _buscaTipo,
+                  items: const ['EAN', 'SAP', 'Descrição'],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() {
+                      _buscaTipo = v;
+                      _eanController.hint = v == 'EAN'
+                          ? 'Digite o EAN'
+                          : v == 'SAP'
+                              ? 'Digite o SAP'
+                              : 'Buscar Por Descrição';
+                      _eanController.keyboardType = v == 'Descrição'
+                          ? TextInputType.text
+                          : TextInputType.number;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _eanController,
+                    decoration: const InputDecoration(
+                      hintText: 'DIGITE O EAN',
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
                     ),
-                    Text('${tag.quantity}'),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: () => _changeQuantity(tag, 1),
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.only(right: 4),
+                  height: 40,
+                  child: ElevatedButton(
+                    onPressed: () => _fetchAndAdd(_eanController.text),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD32F2F),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      textStyle: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold),
                     ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: AppColors.primary),
-                      onPressed: () => _deleteTag(tag),
-                    ),
-                  ],
+                    child: const Text('BUSCAR'),
+                  ),
                 ),
               ],
             ),
           ),
         ),
-      );
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _limparLista,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFD32F2F),
+                    side: const BorderSide(color: Color(0xFFD32F2F)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  child: const Text('LIMPAR LISTA'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _imprimirTodas,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD32F2F),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  child: const Text('IMPRIMIR TODAS'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_tags.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '${_tags.length} item(ns) na lista',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFD32F2F),
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _emptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: const BoxDecoration(
+              color: Color(0x1A000000),
+              shape: BoxShape.circle,
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Image.asset('assets/icons/ic_price_tag.png',
+                color: const Color(0xFFA0A0A0)),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            '0 item(a) na lista\n\nEscaneie ou digite\npara adicionar à lista',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Color(0xFF999999), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -494,32 +510,43 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       children: [
         Column(
           children: [
-            _buildHeader(),
+            _buildFilterBar(),
             Expanded(
               child: _loadingTags && _tags.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : _tags.isEmpty
-                      ? const Center(child: Text('Nenhuma etiqueta'))
-                      : ListView.builder(
+                      ? _emptyState()
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                           itemCount: _tags.length,
-                          itemBuilder: (_, i) => _buildCard(_tags[i]),
+                          separatorBuilder: (_, __) => const SizedBox(height: 0),
+                          itemBuilder: (_, i) {
+                            final tag = _tags[i];
+                            return Dismissible(
+                              key: ValueKey(tag.id),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                color: const Color(0xFFD32F2F),
+                                child: const Icon(Icons.delete, color: Colors.white),
+                              ),
+                              onDismissed: (_) => _deleteTag(tag),
+                              child: EtiquetaCard(
+                                tag: tag,
+                                onImprimir: (q) {
+                                  tag.quantity = q;
+                                  _imprimirItem(tag);
+                                },
+                                onRemover: () => _deleteTag(tag),
+                                onChangedQuantity: (q) {
+                                  tag.quantity = q;
+                                  _persist();
+                                },
+                              ),
+                            );
+                          },
                         ),
-            ),
-            Container(
-              width: double.infinity,
-              color: AppColors.primary,
-              child: SafeArea(
-                top: false,
-                child: TextButton(
-                  onPressed: _hasSelection && !_loading ? _sendToPrinter : null,
-                  child: Text(
-                    'ENVIAR PARA IMPRESSORA',
-                    style: AppTextStyles.button.copyWith(
-                      color: _hasSelection ? AppColors.white : AppColors.gray100,
-                    ),
-                  ),
-                ),
-              ),
             ),
           ],
         ),
@@ -531,36 +558,13 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
             ),
           ),
         Positioned(
-          right: 16,
-          bottom: 64,
+          right: 24,
+          bottom: 24,
           child: FloatingActionButton(
-            backgroundColor: AppColors.primary,
-            onPressed: () async {
-              final choice = await showModalBottomSheet<int>(
-                context: context,
-                builder: (ctx) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.camera_alt),
-                      title: const Text('Escanear código'),
-                      onTap: () => Navigator.pop(ctx, 1),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.keyboard),
-                      title: const Text('Digitar EAN'),
-                      onTap: () => Navigator.pop(ctx, 2),
-                    ),
-                  ],
-                ),
-              );
-              if (choice == 1) {
-                await _addByScan();
-              } else if (choice == 2) {
-                await _showManualEanDialog();
-              }
-            },
-            child: const Icon(Icons.add, color: AppColors.white),
+            backgroundColor: const Color(0xFFD32F2F),
+            onPressed: _addByScan,
+            child: Image.asset('assets/icons/ic_scanner.png',
+                width: 24, height: 24, color: Colors.white),
           ),
         ),
       ],

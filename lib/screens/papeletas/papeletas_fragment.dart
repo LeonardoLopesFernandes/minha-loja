@@ -9,6 +9,7 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
+import 'package:minhaloja/widgets/cards.dart';
 
 class PapeletasFragment extends StatefulWidget {
   const PapeletasFragment({super.key});
@@ -27,12 +28,12 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
   bool _loading = false;
   List<PriceSign> _items = [];
 
-  // Filtros
   List<SupplyType> _supplyTypes = [];
   List<String> _sizes = [];
 
   String _type = Constants.tipoComum;
-  String? _department;
+  String _modelo = 'Misto';
+  String _buscaTipo = 'EAN';
   String? _size;
   String _status = Constants.statusAll;
 
@@ -68,6 +69,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       setState(() {
         _supplyTypes = resp.supplyTypes;
         _sizes = resp.size;
+        if (_size == null && _sizes.isNotEmpty) _size = _sizes[2];
       });
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
@@ -83,9 +85,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
   Future<void> _loadSavedAndSigns() async {
     final saved = await ListaStore.instance.getPapeletas();
     if (!mounted) return;
-    setState(() {
-      _items = List<PriceSign>.from(saved);
-    });
+    setState(() => _items = List<PriceSign>.from(saved));
     await _loadSigns();
   }
 
@@ -96,7 +96,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       final resp = await _api.getPriceSigns(
         _store,
         _type,
-        department: _department,
+        department: null,
         size: _size,
         status: _status,
         startDate: _startDate,
@@ -132,7 +132,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
   Future<void> _addStandalone() async {
     final ean = _eanController.text.trim();
     if (ean.isEmpty) {
-      ToastUtils.show(context, 'Informe um EAN');
+      ToastUtils.show(context, 'Informe um código');
       return;
     }
     setState(() => _loading = true);
@@ -140,7 +140,9 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       final resp = await _api.getPriceSignStandalone(
         _store,
         _type,
-        ean: ean,
+        ean: _buscaTipo == 'EAN' ? ean : null,
+        sapId: _buscaTipo == 'SAP' ? ean : null,
+        description: _buscaTipo == 'Descrição do item' ? ean : null,
         startDate: _startDate,
       );
       if (!mounted) return;
@@ -169,9 +171,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
   }
 
   Future<void> _delete(PriceSign item) async {
-    setState(() {
-      _items.removeWhere((e) => e.id == item.id);
-    });
+    setState(() => _items.removeWhere((e) => e.id == item.id));
     await ListaStore.instance.removePapeleta(item);
   }
 
@@ -211,303 +211,320 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
     }
   }
 
-  Widget _buildFilterBar() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildDropdown<String>(
-                value: _type,
-                hint: 'Tipo',
-                items: const [
-                  DropdownMenuItem(
-                      value: Constants.tipoComum, child: Text('Comum')),
-                  DropdownMenuItem(
-                      value: Constants.tipoPromocional,
-                      child: Text('Promocional')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _type = v);
-                  _loadSigns();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDropdown<String>(
-                value: _department,
-                hint: 'Departamento',
-                items: _supplyTypes
-                    .map((s) => DropdownMenuItem(
-                        value: s.id, child: Text(s.label)))
-                    .toList(),
-                onChanged: (v) {
-                  setState(() => _department = v);
-                  _loadSigns();
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDropdown<String>(
-                value: _size,
-                hint: 'Tamanho',
-                items: _sizes
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (v) {
-                  setState(() => _size = v);
-                  _loadSigns();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildDropdown<String>(
-                value: _status,
-                hint: 'Status',
-                items: const [
-                  DropdownMenuItem(
-                      value: Constants.statusImpressas,
-                      child: Text('IMPRESSAS')),
-                  DropdownMenuItem(
-                      value: Constants.statusNaoImpressas,
-                      child: Text('NAO IMPRESSAS')),
-                  DropdownMenuItem(
-                      value: Constants.statusAll, child: Text('TODAS')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _status = v);
-                  _loadSigns();
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _eanController,
-                decoration: const InputDecoration(
-                  labelText: 'Buscar por EAN',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: _addStandalone,
-              child: const Text('Buscar'),
-            ),
-          ],
-        ),
-      ],
-    );
+  Future<void> _imprimirItem(PriceSign item) async {
+    setState(() => item.checkbox = true);
+    await _send();
   }
 
-  Widget _buildDropdown<T>({
-    required T? value,
-    required String hint,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      hint: Text(hint),
-      isExpanded: true,
-      decoration: const InputDecoration(
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  Future<void> _imprimirTodas() async {
+    if (_items.isEmpty) {
+      ToastUtils.show(context, 'Nenhuma papeleta para imprimir');
+      return;
+    }
+    for (final t in _items) {
+      t.checkbox = true;
+    }
+    setState(() {});
+    await _send();
+  }
+
+  Future<void> _limparLista() async {
+    if (_items.isEmpty) {
+      ToastUtils.show(context, 'Lista já está vazia');
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpar Lista'),
+        content: const Text('Tem certeza que deseja remover todos os itens?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
+        ],
       ),
-      items: items,
-      onChanged: onChanged,
+    );
+    if (ok == true) {
+      setState(() => _items.clear());
+      await _persist();
+      ToastUtils.show(context, 'Lista limpa');
+    }
+  }
+
+  Widget _spinnerBox({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isExpanded: true,
+          value: value,
+          items: items
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildFilterBar() {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(8),
-          child: _buildFilterBar(),
-        ),
-        Expanded(
-          child: _loading && _items.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : _items.isEmpty
-                  ? const Center(child: Text('Nenhuma papeleta encontrada'))
-                  : ListView.separated(
-                      itemCount: _items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      itemBuilder: (context, index) {
-                        final item = _items[index];
-                        return _PapeletaCard(
-                          key: ValueKey(item.id),
-                          item: item,
-                          onChangedCheckbox: (v) {
-                            setState(() => item.checkbox = v ?? false);
-                            _persist();
-                          },
-                          onChangedQuantity: (v) {
-                            setState(() => item.quantity = v);
-                            _persist();
-                          },
-                          onEdit: () => _editModelo(item),
-                          onDelete: () => _delete(item),
-                        );
-                      },
-                    ),
-        ),
-        _buildBottomBar(),
-      ],
-    );
-  }
-
-  Widget _buildBottomBar() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        border: Border(top: BorderSide(color: AppColors.cardBorder)),
-      ),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-        ),
-        onPressed: _send,
-        child: const Text('ENVIAR PARA IMPRESSORA'),
-      ),
-    );
-  }
-}
-
-class _PapeletaCard extends StatelessWidget {
-  final PriceSign item;
-  final ValueChanged<bool?> onChangedCheckbox;
-  final ValueChanged<int> onChangedQuantity;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _PapeletaCard({
-    super.key,
-    required this.item,
-    required this.onChangedCheckbox,
-    required this.onChangedQuantity,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Dismissible(
-      key: Key('papeleta_${item.id}'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 16),
-        color: AppColors.primary,
-        child: const Icon(Icons.delete, color: AppColors.white),
-      ),
-      onDismissed: (_) => onDelete(),
-      child: Card(
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: AppColors.cardBorder),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Checkbox(
-                    value: item.checkbox,
-                    activeColor: AppColors.primary,
-                    onChanged: onChangedCheckbox,
-                  ),
-                  Expanded(
-                    child: Text(
-                      item.description.isNotEmpty
-                          ? item.description
-                          : 'Sem descrição',
-                      style: AppTextStyles.title,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: AppColors.primary),
-                    onPressed: onEdit,
-                    tooltip: 'Editar modelo',
-                  ),
-                ],
+              Expanded(
+                child: _spinnerBox(
+                  value: _type == Constants.tipoComum ? 'Comum' : 'Promocional',
+                  items: const ['Comum', 'Promocional'],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _type = v == 'Comum'
+                        ? Constants.tipoComum
+                        : Constants.tipoPromocional);
+                    _loadSigns();
+                  },
+                ),
               ),
-              const SizedBox(height: 4),
-              Text('Departamento: ${item.department}',
-                  style: AppTextStyles.subtitle),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text('Preço: ${item.price}',
-                      style: AppTextStyles.body),
-                  const SizedBox(width: 12),
-                  if (item.printingData?.promotionPrice != null)
-                    Text(
-                        'Promo: ${item.printingData!.promotionPrice}',
-                        style: const TextStyle(
-                            color: AppColors.green,
-                            fontWeight: FontWeight.bold)),
-                ],
-              ),
-              if (item.movement.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text('Movimento: ${item.movement}',
-                    style: AppTextStyles.subtitle),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle_outline),
-                    onPressed: () {
-                      if (item.quantity > 1) {
-                        onChangedQuantity(item.quantity - 1);
-                      }
-                    },
-                  ),
-                  Text('${item.quantity}', style: AppTextStyles.body),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    onPressed: () =>
-                        onChangedQuantity(item.quantity + 1),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: onEdit,
-                    child: const Text('EDITAR MODELO'),
-                  ),
-                ],
+              const SizedBox(width: 4),
+              Expanded(
+                child: _spinnerBox(
+                  value: _modelo,
+                  items: const [
+                    'Misto',
+                    'Promocional',
+                    'Promocional Editável',
+                    'Comum',
+                    'Comum Editável',
+                    'Vencimentos'
+                  ],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _modelo = v);
+                  },
+                ),
               ),
             ],
           ),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: _spinnerBox(
+                  value: _buscaTipo,
+                  items: const ['EAN', 'SAP', 'Descrição do item'],
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() {
+                      _buscaTipo = v;
+                      _eanController.hint = v == 'EAN'
+                          ? 'Digite o EAN'
+                          : v == 'SAP'
+                              ? 'Digite o SAP'
+                              : 'Buscar Por Descrição';
+                      _eanController.keyboardType = v == 'Descrição do item'
+                          ? TextInputType.text
+                          : TextInputType.number;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _spinnerBox(
+                  value: _size ?? (_sizes.isNotEmpty ? _sizes[2] : '4×1'),
+                  items: (_sizes.isNotEmpty ? _sizes : ['1×1', '2×1', '4×1', '6×1'])
+                      .map((e) => e)
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _size = v);
+                    _loadSigns();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _eanController,
+                    decoration: const InputDecoration(
+                      hintText: 'DIGITE O EAN',
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.only(right: 4),
+                  height: 40,
+                  child: ElevatedButton(
+                    onPressed: _addStandalone,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD32F2F),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      textStyle: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    child: const Text('BUSCAR'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _limparLista,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFD32F2F),
+                    side: const BorderSide(color: Color(0xFFD32F2F)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  child: const Text('LIMPAR LISTA'),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _imprimirTodas,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD32F2F),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  child: const Text('IMPRIMIR TODAS'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_items.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '${_items.length} item(ns) na lista',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFD32F2F),
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Column(
+          children: [
+            _buildFilterBar(),
+            Expanded(
+              child: _loading && _items.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : _items.isEmpty
+                      ? const Center(
+                          child: Text('Nenhuma papeleta encontrada'))
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                          itemCount: _items.length,
+                          itemBuilder: (context, index) {
+                            final item = _items[index];
+                            return Dismissible(
+                              key: Key('papeleta_${item.id}'),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 16),
+                                color: const Color(0xFFD32F2F),
+                                child: const Icon(Icons.delete, color: Colors.white),
+                              ),
+                              onDismissed: (_) => _delete(item),
+                              child: PapeletaCard(
+                                item: item,
+                                onImprimir: (q) {
+                                  item.quantity = q;
+                                  _imprimirItem(item);
+                                },
+                                onRemover: () => _delete(item),
+                                onChangedQuantity: (q) {
+                                  item.quantity = q;
+                                  _persist();
+                                },
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+        if (_loading)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: Color(0x33000000),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        Positioned(
+          right: 24,
+          bottom: 24,
+          child: FloatingActionButton(
+            backgroundColor: const Color(0xFFD32F2F),
+            onPressed: () async {
+              final r = await Navigator.pushNamed(context, '/barcode');
+              if (r is String && r.isNotEmpty) {
+                _eanController.text = r;
+                await _addStandalone();
+              }
+            },
+            child: Image.asset('assets/icons/ic_scanner.png',
+                width: 24, height: 24, color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 }

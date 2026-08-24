@@ -18,50 +18,36 @@ class _MainScreenState extends State<MainScreen> {
 
   final SessionManager _session = SessionManager.instance!;
 
-  final List<_MenuItem> _menuItems = const [
-    _MenuItem('ETIQUETAS', Icons.label),
-    _MenuItem('PAPELETAS', Icons.description),
-    _MenuItem('ETIQUETA AVULSA', Icons.label),
-    _MenuItem('PAPELETA DIÁRIA', Icons.description),
-    _MenuItem('PERFIL', Icons.person),
-    _MenuItem('SAIR', Icons.exit_to_app),
-  ];
-
-  String get _titulo =>
-      _currentBody == 0 ? 'ETIQUETA AVULSA' : 'PAPELETA AVULSA';
+  // Título exibido no header após selecionar uma seção (null = mostra logo)
+  String? _sectionTitle;
+  String? _sectionIcon;
 
   void _toggleMenu() => setState(() => _menuOpen = !_menuOpen);
 
-  void _selecionarCorpo(int index) {
+  void _selecionarCorpo(int index, String titulo, String icon) {
     setState(() {
       _currentBody = index;
+      _sectionTitle = titulo;
+      _sectionIcon = icon;
       _menuOpen = false;
     });
   }
 
   void _onMenuItem(int index) {
-    final label = _menuItems[index].label;
-    switch (label) {
-      case 'ETIQUETAS':
-        _selecionarCorpo(0);
+    switch (index) {
+      case 0:
+        _selecionarCorpo(0, 'ETIQUETA AVULSA', 'assets/icons/eti_avulsa.png');
         break;
-      case 'PAPELETAS':
-        _selecionarCorpo(1);
+      case 1:
+        _selecionarCorpo(1, 'PAPELETA AVULSA', 'assets/icons/pap_avulsa.png');
         break;
-      case 'ETIQUETA AVULSA':
+      case 2:
         setState(() => _menuOpen = false);
         Navigator.pushNamed(context, '/etiquetas');
         break;
-      case 'PAPELETA DIÁRIA':
+      case 3:
         setState(() => _menuOpen = false);
         Navigator.pushNamed(context, '/papeletas_diarias');
-        break;
-      case 'PERFIL':
-        setState(() => _menuOpen = false);
-        Navigator.pushNamed(context, '/profile');
-        break;
-      case 'SAIR':
-        _confirmarSaida();
         break;
     }
   }
@@ -133,44 +119,65 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildHeader() {
     return Container(
-      color: AppColors.primary,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      color: Colors.white,
+      padding: const EdgeInsets.only(top: 16, bottom: 8, left: 20, right: 20),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(
-              _menuOpen ? Icons.close : Icons.menu,
-              color: Colors.white,
-            ),
-            onPressed: _toggleMenu,
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Minha Loja',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+          // Hamburger
+          GestureDetector(
+            onTap: _toggleMenu,
+            child: Container(
+              width: 45,
+              height: 45,
+              decoration: const BoxDecoration(
+                color: Color(0x1A000000),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                _menuOpen ? '✕' : '☰',
+                style: const TextStyle(
+                  color: Color(0xFFD81B3A),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Text(
-              _titulo,
-              key: ValueKey<String>(_titulo),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+          Expanded(
+            child: _sectionTitle == null
+                ? Image.asset('assets/icons/icon_header.png',
+                    height: 36, fit: BoxFit.contain)
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset(_sectionIcon!,
+                          height: 24,
+                          color: const Color(0xFFD81B3A),
+                          fit: BoxFit.contain),
+                      const SizedBox(width: 6),
+                      Text(_sectionTitle!,
+                          style: const TextStyle(
+                            color: Color(0xFFD81B3A),
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          )),
+                    ],
+                  ),
+          ),
+          // Avatar
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/profile'),
+            child: Container(
+              width: 45,
+              height: 45,
+              decoration: const BoxDecoration(
+                color: Color(0x1A000000),
+                shape: BoxShape.circle,
               ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.person, size: 22, color: Color(0xFF555555)),
             ),
           ),
         ],
@@ -178,10 +185,24 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildBody() {
-    return _currentBody == 0
-        ? const EtiquetasFragment()
-        : const PapeletasFragment();
+  Widget _menuItem(String icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Image.asset(icon, width: 24, height: 24, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildMenu() {
@@ -190,67 +211,63 @@ class _MainScreenState extends State<MainScreen> {
       curve: Curves.easeInOut,
       transform: Matrix4.translationValues(_menuOpen ? 0 : -300, 0, 0),
       width: 280,
-      color: Colors.white,
+      margin: const EdgeInsets.only(top: 62, left: 4),
+      padding: const EdgeInsets.fromLTRB(20, 16, 24, 16),
+      decoration: const BoxDecoration(
+        color: Color(0xFFE5093A),
+        borderRadius: BorderRadius.only(
+          topRight: Radius.circular(24),
+          bottomRight: Radius.circular(24),
+        ),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            color: AppColors.primary,
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-            child: const Text(
-              'Minha Loja',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _menuItems.length,
-              separatorBuilder: (_, __) =>
-                  const Divider(height: 1, color: AppColors.cardBorder),
-              itemBuilder: (context, index) {
-                final item = _menuItems[index];
-                return ListTile(
-                  leading: Icon(item.icon, color: AppColors.primary),
-                  title: Text(
-                    item.label,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.gray900,
-                    ),
-                  ),
-                  onTap: () => _onMenuItem(index),
-                );
-              },
-            ),
-          ),
+          Image.asset('assets/icons/logo_menu.png',
+              width: 120, height: 48, fit: BoxFit.fitWidth),
+          const SizedBox(height: 16),
+          _menuItem('assets/icons/eti_avulsa.png', 'ETIQUETA AVULSA',
+              () => _onMenuItem(0)),
+          _divider(),
+          _menuItem('assets/icons/pap_avulsa.png', 'PAPELETA AVULSA',
+              () => _onMenuItem(1)),
+          _divider(),
+          _menuItem('assets/icons/ic_etiqueta.png', 'ETIQUETAS DIÁRIAS',
+              () => _onMenuItem(2)),
+          _divider(),
+          _menuItem('assets/icons/ic_papeletas.png', 'PAPELETAS DIÁRIAS',
+              () => _onMenuItem(3)),
         ],
       ),
     );
   }
+
+  Widget _divider() => Container(
+        height: 0.5,
+        color: Colors.white.withOpacity(0.15),
+      );
 
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: AppColors.gray100,
+        backgroundColor: const Color(0xFFF4F6F8),
         floatingActionButton: FloatingActionButton(
-          backgroundColor: AppColors.primary,
+          backgroundColor: const Color(0xFFD32F2F),
           foregroundColor: Colors.white,
           onPressed: _abrirScanner,
-          child: const Icon(Icons.camera_alt),
+          child: Image.asset('assets/icons/ic_scanner.png',
+              width: 24, height: 24, color: Colors.white),
         ),
         body: GestureDetector(
           onHorizontalDragEnd: (details) {
             if (details.primaryVelocity == null) return;
-            if (details.primaryVelocity! > 0) {
-              if (!_menuOpen) setState(() => _menuOpen = true);
-            } else if (details.primaryVelocity! < 0) {
-              if (_menuOpen) setState(() => _menuOpen = false);
+            if (details.primaryVelocity! > 0 && !_menuOpen) {
+              setState(() => _menuOpen = true);
+            } else if (details.primaryVelocity! < 0 && _menuOpen) {
+              setState(() => _menuOpen = false);
             }
           },
           child: Stack(
@@ -258,32 +275,25 @@ class _MainScreenState extends State<MainScreen> {
               Column(
                 children: [
                   _buildHeader(),
-                  Expanded(child: _buildBody()),
+                  Expanded(
+                    child: _currentBody == 0
+                        ? const EtiquetasFragment()
+                        : const PapeletasFragment(),
+                  ),
                 ],
               ),
               if (_menuOpen)
                 Positioned.fill(
                   child: GestureDetector(
                     onTap: _toggleMenu,
-                    child: Container(color: Colors.black54),
+                    child: Container(color: const Color(0x33000000)),
                   ),
                 ),
-              Positioned(
-                top: 0,
-                bottom: 0,
-                left: 0,
-                child: _buildMenu(),
-              ),
+              if (_menuOpen) Positioned(top: 0, left: 0, child: _buildMenu()),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-class _MenuItem {
-  final String label;
-  final IconData icon;
-  const _MenuItem(this.label, this.icon);
 }
