@@ -48,7 +48,6 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   bool _modoEditavel = false;
   bool _modoVencimentos = false;
   bool _mostrarOverlay = true;
-  bool _hideGerarPreview = false;
 
   bool _sending = false;
   bool _gerando = false;
@@ -68,7 +67,6 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   void initState() {
     super.initState();
     _resolveArgs();
-    _gerarPreview();
   }
 
   @override
@@ -96,7 +94,6 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
       _modoEditavel = args['modoEditavel'] ?? false;
       _modoVencimentos = args['modoVencimentos'] ?? false;
       _mostrarOverlay = args['mostrarCheckboxOverlay'] ?? true;
-      _hideGerarPreview = args['hideGerarPreview'] ?? !_modoEditavel;
     }
     if (_items.isEmpty) {
       _items = [];
@@ -445,26 +442,24 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
               ),
             ],
           ),
-          if (!_hideGerarPreview) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 44,
-              child: ElevatedButton(
-                onPressed: _loadingPreview ? null : _gerarPreview,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kRed,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
-                ),
-                child: Text(
-                  'GERAR PRÉ-VISUALIZAÇÃO ${_size.toUpperCase()}',
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.bold),
-                ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 44,
+            child: ElevatedButton(
+              onPressed: _loadingPreview ? null : _gerarPreview,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6)),
+              ),
+              child: Text(
+                'GERAR PRÉ-VISUALIZAÇÃO ${_size.toUpperCase()}',
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.bold),
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -492,7 +487,16 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
       );
     }
     if (_pages.isEmpty) {
-      return const Center(child: Text('Nada para exibir'));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Clique em GERAR PRÉ-VISUALIZAÇÃO para visualizar.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.black54),
+          ),
+        ),
+      );
     }
     return Stack(
       children: [
