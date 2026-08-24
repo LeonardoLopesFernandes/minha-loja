@@ -30,6 +30,16 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Patch pdf_render (remove dead Registrar import incompatible with current Flutter)
+        run: |
+          F=$(find "${PUB_CACHE:-$HOME/.pub-cache}" /home/runner/.pub-cache "$HOME/.pub-cache" -path "*pdf_render*/android/src/main/kotlin/jp/espresso3389/pdf_render/PdfRenderPlugin.kt" 2>/dev/null | head -1)
+          if [ -n "$F" ]; then
+            echo "Patching pdf_render source: $F"
+            sed -i '/import io.flutter.plugin.common.PluginRegistry.Registrar/d' "$F"
+          else
+            echo "pdf_render source not found; skipping patch"
+          fi
+
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses || true
 
