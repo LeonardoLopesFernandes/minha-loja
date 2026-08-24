@@ -345,21 +345,24 @@ Future<img.Image?> _rasterizeCard(
   try {
     if (doc.pageCount < 1) return null;
     final page = await doc.getPage(1);
-    // O PdfRenderer do Android (usado no MLoja) renderiza a página preservando
-    // a proporção (letterbox). O pdf_render, por padrão, aplica escalas X/Y
-    // independentes e ESTICA o conteúdo para preencher o destino, o que
-    // distorce/exagera o conteúdo quando a proporção da célula difere da do
-    // PDF (ex.: 4X1/6X1). Forçamos uma escala uniforme (contain) via
-    // fullWidth/fullHeight, idêntico ao comportamento do Android.
+    // Fiel ao renderPdfToBitmap do MLoja (ModeloEditavelActivity.kt:541): a
+    // página é renderizada em sua PROPORÇÃO NATIVA (page.width*scale x
+    // page.height*scale, scale = min(ceil(w/pageW), ceil(h/pageH), 8),
+    // renderWidth<=7200). O bitmap resultante TEM a proporção do PDF; quem
+    // estica para preencher a célula é o centralizarConteudo, exatamente como
+    // no Android. Assim a visualização fica idêntica à do MLoja.
     final pw = page.width;
     final ph = page.height;
-    final scale = (pw <= 0 || ph <= 0) ? 1.0 : (w / pw < h / ph ? w / pw : h / ph);
-    final pi = await page.render(
-      width: w,
-      height: h,
-      fullWidth: pw * scale,
-      fullHeight: ph * scale,
-    );
+    if (pw <= 0 || ph <= 0) return null;
+    int scale = (w / pw).ceil();
+    final ch = (h / ph).ceil();
+    if (ch < scale) scale = ch;
+    if (scale > 8) scale = 8;
+    if (scale < 1) scale = 1;
+    int renderWidth = (pw * scale).round();
+    if (renderWidth > 7200) renderWidth = 7200;
+    final renderHeight = (ph * (renderWidth / pw)).round();
+    final pi = await page.render(width: renderWidth, height: renderHeight);
     final raster = img.Image.fromBytes(
         width: pi.width,
         height: pi.height,
