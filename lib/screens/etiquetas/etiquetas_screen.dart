@@ -78,12 +78,10 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
     setState(() => _isLoading = true);
     try {
       final menu = await _api.getPriceTags(_storeId, _currentDate);
-      final info = menu.infoTag;
-      if (info != null) {
-        _naoImpressas = info.unprinted;
-        _impressas = info.printed;
-        _total = info.total;
-      }
+      final info = menu.page.infoTag;
+      _naoImpressas = info.unprintedTags;
+      _impressas = info.printedTags;
+      _total = info.totalTags;
       final filters = await _api.getPriceTagFilters(_storeId, _currentDate);
       _printers = (filters.tags)
           .where((t) => (t.printerId).toUpperCase().contains('ZEBRA'))
@@ -95,7 +93,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
       }
       await _loadTags();
     } on ApiException catch (e) {
-      if (e.isSessionExpired) {
+      if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
       } else {
         ToastUtils.showError(context, e.message);
@@ -126,7 +124,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
           .compareTo(_deptNumber(b.department).toString()));
       setState(() => _items = list);
     } on ApiException catch (e) {
-      if (e.isSessionExpired) {
+      if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
       } else {
         ToastUtils.showError(context, e.message);
@@ -204,12 +202,12 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
         _storeId,
         _selectedPrinterId,
         _selectedTagId,
-        SendPriceTagsRequest(priceTags: data),
+        SendPriceTagsRequest(products: data),
       );
       ToastUtils.showSuccess(context, 'Enviado para impressão');
       await _loadInit();
     } on ApiException catch (e) {
-      if (e.isSessionExpired) {
+      if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
       } else {
         ToastUtils.showError(context, e.message);

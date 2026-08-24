@@ -102,7 +102,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
 
       await _loadSigns();
     } on ApiException catch (e) {
-      if (e.isSessionExpired) {
+      if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
       } else {
         ToastUtils.showError(context, e.message);
@@ -146,7 +146,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
 
       setState(() => _items = all);
     } on ApiException catch (e) {
-      if (e.isSessionExpired) {
+      if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
       } else {
         ToastUtils.showError(context, e.message);
@@ -221,7 +221,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
       ToastUtils.showSuccess(context, 'Papeletas enviadas para impressora');
       await _loadSigns();
     } on ApiException catch (e) {
-      if (e.isSessionExpired) {
+      if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
       } else {
         ToastUtils.showError(context, e.message);
