@@ -437,6 +437,7 @@ Widget _qtyBox(TextEditingController c, ValueChanged<int> onChange) {
       child: TextField(
         controller: c,
         textAlign: TextAlign.center,
+        textAlignVertical: TextAlignVertical.center,
         keyboardType: TextInputType.number,
         style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _descDark2),
         decoration: const InputDecoration(

@@ -48,7 +48,8 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
   }
 
   void _configureGrid() {
-    switch (widget.size.toUpperCase()) {
+    final s = widget.size.toUpperCase().replaceAll('×', 'X');
+    switch (s) {
       case '1X1':
         _cols = 1;
         _rows = 1;
@@ -156,9 +157,10 @@ Future<List<Uint8List>> buildCompositePages({
   required List<String> validades,
   bool semOverlay = false,
 }) async {
+  final s = size.toUpperCase().replaceAll('×', 'X');
   int cols = 2;
   int rows = 2;
-  switch (size.toUpperCase()) {
+  switch (s) {
     case '1X1':
       cols = 1;
       rows = 1;
@@ -179,7 +181,7 @@ Future<List<Uint8List>> buildCompositePages({
   }
 
   final overlayData =
-      await rootBundle.load('assets/overlays/${size.toLowerCase()}.png');
+      await rootBundle.load('assets/overlays/${s.toLowerCase()}.png');
   final overlay = img.decodeImage(overlayData.buffer.asUint8List());
 
   final gridCap = cols * rows;

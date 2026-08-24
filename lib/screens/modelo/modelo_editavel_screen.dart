@@ -49,7 +49,6 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   bool _modoVencimentos = false;
   bool _mostrarOverlay = true;
   bool _hideGerarPreview = false;
-  bool _multiMode = false;
 
   bool _sending = false;
   bool _gerando = false;
@@ -91,13 +90,13 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
       } else if (args['printingData'] is PapeletaPrintingData) {
         _items = [args['printingData'] as PapeletaPrintingData];
       }
-      _size = args['size'] ?? Constants.signSize4x1;
+      _size = (args['size'] ?? Constants.signSize4x1).toString();
+      _size = _size.replaceAll('×', 'X').toUpperCase();
       _semOverlay = args['semOverlay'] ?? false;
       _modoEditavel = args['modoEditavel'] ?? false;
       _modoVencimentos = args['modoVencimentos'] ?? false;
       _mostrarOverlay = args['mostrarCheckboxOverlay'] ?? true;
       _hideGerarPreview = args['hideGerarPreview'] ?? !_modoEditavel;
-      _multiMode = args['multiMode'] ?? (_items.length > 1);
     }
     if (_items.isEmpty) {
       _items = [];
@@ -721,25 +720,23 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
               ),
             ],
           ),
-          if (_multiMode) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                onPressed: _gerando ? null : _compartilharPdf,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kDarkRed,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
-                ),
-                child: Text(_gerando ? 'GERANDO...' : 'COMPARTILHAR PDF',
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton(
+              onPressed: _gerando ? null : _compartilharPdf,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kDarkRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6)),
               ),
+              child: Text(_gerando ? 'GERANDO...' : 'COMPARTILHAR PDF',
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.bold)),
             ),
-          ],
+          ),
         ],
       ),
     );
