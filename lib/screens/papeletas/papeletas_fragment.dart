@@ -38,6 +38,8 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
   String _status = Constants.statusAll;
 
   final TextEditingController _eanController = TextEditingController();
+  String _eanHint = 'Digite o EAN';
+  TextInputType _eanKeyboardType = TextInputType.number;
 
   @override
   void initState() {
@@ -332,12 +334,12 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                     if (v == null) return;
                     setState(() {
                       _buscaTipo = v;
-                      _eanController.hint = v == 'EAN'
+                      _eanHint = v == 'EAN'
                           ? 'Digite o EAN'
                           : v == 'SAP'
                               ? 'Digite o SAP'
                               : 'Buscar Por Descrição';
-                      _eanController.keyboardType = v == 'Descrição do item'
+                      _eanKeyboardType = v == 'Descrição do item'
                           ? TextInputType.text
                           : TextInputType.number;
                     });
@@ -375,10 +377,12 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                 Expanded(
                   child: TextField(
                     controller: _eanController,
-                    decoration: const InputDecoration(
-                      hintText: 'DIGITE O EAN',
+                    keyboardType: _eanKeyboardType,
+                    decoration: InputDecoration(
+                      hintText: _eanHint,
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16),
                     ),
                   ),
                 ),

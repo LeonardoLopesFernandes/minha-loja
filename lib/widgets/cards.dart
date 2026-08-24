@@ -318,7 +318,7 @@ class _PapeletaCardState extends State<PapeletaCard> {
                           fontSize: 14, fontWeight: FontWeight.bold, color: _descDark2)),
                 ),
                 IconButton(
-                  onPressed: () => widget.onImprir(int.tryParse(_qty.text) ?? 1),
+                  onPressed: () => widget.onImprimir(int.tryParse(_qty.text) ?? 1),
                   icon: Image.asset('assets/icons/printer.png',
                       width: 22, height: 22, color: _green),
                   padding: const EdgeInsets.all(2),

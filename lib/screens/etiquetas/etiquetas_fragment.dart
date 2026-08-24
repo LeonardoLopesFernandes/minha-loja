@@ -78,6 +78,8 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
 
   final TextEditingController _eanController = TextEditingController();
   String _buscaTipo = 'EAN';
+  String _eanHint = 'Digite o EAN';
+  TextInputType _eanKeyboardType = TextInputType.number;
 
   @override
   void initState() {
@@ -368,12 +370,12 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
                     if (v == null) return;
                     setState(() {
                       _buscaTipo = v;
-                      _eanController.hint = v == 'EAN'
+                      _eanHint = v == 'EAN'
                           ? 'Digite o EAN'
                           : v == 'SAP'
                               ? 'Digite o SAP'
                               : 'Buscar Por Descrição';
-                      _eanController.keyboardType = v == 'Descrição'
+                      _eanKeyboardType = v == 'Descrição'
                           ? TextInputType.text
                           : TextInputType.number;
                     });
@@ -397,10 +399,12 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
                 Expanded(
                   child: TextField(
                     controller: _eanController,
-                    decoration: const InputDecoration(
-                      hintText: 'DIGITE O EAN',
+                    keyboardType: _eanKeyboardType,
+                    decoration: InputDecoration(
+                      hintText: _eanHint,
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16),
                     ),
                   ),
                 ),
