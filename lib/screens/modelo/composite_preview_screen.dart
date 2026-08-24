@@ -154,6 +154,7 @@ Future<List<Uint8List>> buildCompositePages({
   required String size,
   required bool modoVencimentos,
   required List<String> validades,
+  bool semOverlay = false,
 }) async {
   int cols = 2;
   int rows = 2;
@@ -191,8 +192,10 @@ Future<List<Uint8List>> buildCompositePages({
     final ovH = overlay?.height ?? 1200;
     final base = img.Image(width: ovW, height: ovH,
         numChannels: 4, format: img.Format.uint8);
-    if (overlay != null) {
+    if (overlay != null && !semOverlay) {
       img.compositeImage(base, overlay);
+    } else {
+      img.fill(base, color: img.ColorRgb8(255, 255, 255));
     }
     final halfW = (ovW / cols).floor();
     final halfH = (ovH / rows).floor();

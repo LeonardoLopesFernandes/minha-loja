@@ -1,7 +1,5 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:minhaloja/core/constants.dart';
@@ -10,23 +8,29 @@ import 'package:minhaloja/core/theme.dart';
 import 'package:minhaloja/models/models.dart';
 import 'package:minhaloja/network/api_client.dart';
 import 'package:minhaloja/network/api_service.dart';
+import 'package:minhaloja/screens/modelo/composite_preview_screen.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
-import 'package:minhaloja/screens/modelo/composite_preview_screen.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 /// IP/porta da impressora (socket RAW, igual ao MLoja).
 const String _kPrinterIp = '10.25.168.24';
 const int _kPrinterPort = 9100;
 
-/// Espelha o fluxo multi-item da ModeloEditavelActivity do MLoja:
-/// lista todos os itens com checkboxes, seletor de tamanho,
-/// "GERAR PRÉ-VISUALIZAÇÃO" e "IMPRIMIR".
+/// Paleta fiel à ModeloEditavelActivity do MLoja (cores do app Android).
+const Color _kRed = Color(0xFFC62828);
+const Color _kDarkRed = Color(0xFF8E0000);
+const Color _kBg = Color(0xFFF4F6F8);
+const Color _kPreviewBg = Color(0xFFEEEEEE);
+
+/// Espelha a ModeloEditavelActivity do MLoja: tela sem AppBar com título
+/// centralizado, card de pré-visualização composta embutido, opção de
+/// overlay promocional, quantidade de cópias, seção "EDITAR ITENS" (no modo
+/// editável) e barra fixa com VOLTAR / IMPRIMIR / COMPARTILHAR PDF.
 class ModeloEditavelScreen extends StatefulWidget {
   const ModeloEditavelScreen({super.key});
 
@@ -39,33 +43,43 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   final SessionManager session = SessionManager.instance!;
 
   List<PapeletaPrintingData> _items = [];
-  List<bool> _selected = [];
   late String _size;
   bool _semOverlay = false;
   bool _modoEditavel = false;
   bool _modoVencimentos = false;
-  bool _mostrarCheckbox = true;
+  bool _mostrarOverlay = true;
   bool _hideGerarPreview = false;
+  bool _multiMode = false;
 
   bool _sending = false;
   bool _gerando = false;
+  bool _loadingPreview = false;
+  String? _errorPreview;
 
   /// Comum pura (não Vencimentos) → envio via API; demais → PDF via socket.
-  bool _enviarApi = false;
+  late bool _enviarApi;
 
   List<_ItemCtrls> _ctrls = [];
-
-  static const List<String> _sizes = [
-    Constants.signSize1x1,
-    Constants.signSize2x1,
-    Constants.signSize4x1,
-    Constants.signSize6x1,
-  ];
+  List<Uint8List> _pages = [];
+  int _page = 0;
+  final TextEditingController _copiaCtrl = TextEditingController(text: '1');
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _resolveArgs();
+    _gerarPreview();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _ctrls) {
+      c.dispose();
+    }
+    _copiaCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
   }
 
   void _resolveArgs() {
@@ -78,25 +92,18 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         _items = [args['printingData'] as PapeletaPrintingData];
       }
       _size = args['size'] ?? Constants.signSize4x1;
-      if (!_sizes.contains(_size)) _size = Constants.signSize4x1;
       _semOverlay = args['semOverlay'] ?? false;
       _modoEditavel = args['modoEditavel'] ?? false;
       _modoVencimentos = args['modoVencimentos'] ?? false;
-      _mostrarCheckbox = args['mostrarCheckbox'] ?? true;
-      _hideGerarPreview = args['hideGerarPreview'] ?? false;
+      _mostrarOverlay = args['mostrarCheckboxOverlay'] ?? true;
+      _hideGerarPreview = args['hideGerarPreview'] ?? !_modoEditavel;
+      _multiMode = args['multiMode'] ?? (_items.length > 1);
     }
     if (_items.isEmpty) {
       _items = [];
     }
-    _selected = List.filled(_items.length, true);
     _ctrls = _items.map((d) => _ItemCtrls(d)).toList();
     _enviarApi = !_modoVencimentos && _items.every(_isComum);
-  }
-
-  @override
-  void dispose() {
-    for (final c in _ctrls) c.dispose();
-    super.dispose();
   }
 
   PapeletaPrintingData _currentData(int i) {
@@ -129,20 +136,64 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     return true;
   }
 
-  List<PapeletaPrintingData> _selecionados() {
-    final sel = <PapeletaPrintingData>[];
-    final val = <String>[];
-    for (int i = 0; i < _items.length; i++) {
-      if (!_mostrarCheckbox || _selected[i]) {
-        sel.add(_currentData(i).copyWith(size: _size, quantity: 1));
-        val.add(_ctrls[i].validade.text);
-      }
-    }
-    _validadesSelecionadas = val;
-    return sel;
+  int get _copias {
+    final v = int.tryParse(_copiaCtrl.text);
+    return (v == null || v < 1) ? 1 : v;
   }
 
-  List<String> _validadesSelecionadas = [];
+  List<PapeletaPrintingData> _selecionados() {
+    final out = <PapeletaPrintingData>[];
+    for (int i = 0; i < _items.length; i++) {
+      out.add(_currentData(i).copyWith(size: _size, quantity: _copias));
+    }
+    return out;
+  }
+
+  List<String> _validades() =>
+      [for (int i = 0; i < _items.length; i++) _ctrls[i].validade.text];
+
+  List<Uint8List> _comCopias(List<Uint8List> pages) {
+    if (_copias <= 1) return pages;
+    final out = <Uint8List>[];
+    for (var i = 0; i < _copias; i++) {
+      out.addAll(pages);
+    }
+    return out;
+  }
+
+  Future<void> _gerarPreview() async {
+    if (_items.isEmpty) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingPreview = true;
+      _errorPreview = null;
+    });
+    try {
+      final list = _selecionados();
+      _pages = await buildCompositePages(
+        api: api,
+        items: list,
+        size: _size,
+        modoVencimentos: _modoVencimentos,
+        validades: _validades(),
+        semOverlay: _semOverlay,
+      );
+      _page = 0;
+      if (mounted) setState(() => _loadingPreview = false);
+    } catch (e) {
+      LogHelper.e('ModeloEditavel: erro preview', e);
+      if (mounted) {
+        setState(() {
+          _errorPreview = 'Erro ao gerar pré-visualização';
+          _loadingPreview = false;
+        });
+      }
+    }
+  }
 
   Future<void> _imprimir() async {
     final toSend = _selecionados();
@@ -174,8 +225,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         if (mounted) setState(() => _sending = false);
       }
     } else {
-      // Demais tipos (Promocional, Misto, Vencimentos) → gera PDF e envia
-      // via socket RAW, igual ao MLoja.
+      // Demais tipos → gera PDF e envia via socket RAW (igual ao MLoja).
       await _enviarViaSocket(toSend);
     }
   }
@@ -188,11 +238,12 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         items: toSend,
         size: _size,
         modoVencimentos: _modoVencimentos,
-        validades: _validadesSelecionadas,
+        validades: _validades(),
+        semOverlay: _semOverlay,
       );
-      final pdfBytes = await _gerarPdfBytes(pages);
-      final socket =
-          await Socket.connect(_kPrinterIp, _kPrinterPort, timeout: const Duration(seconds: 5));
+      final pdfBytes = await _gerarPdfBytes(_comCopias(pages));
+      final socket = await Socket.connect(_kPrinterIp, _kPrinterPort,
+          timeout: const Duration(seconds: 5));
       socket.add(pdfBytes);
       await socket.flush();
       await socket.close();
@@ -221,9 +272,10 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         items: toSend,
         size: _size,
         modoVencimentos: _modoVencimentos,
-        validades: _validadesSelecionadas,
+        validades: _validades(),
+        semOverlay: _semOverlay,
       );
-      final pdfBytes = await _gerarPdfBytes(pages);
+      final pdfBytes = await _gerarPdfBytes(_comCopias(pages));
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/papeletas.pdf');
       await file.writeAsBytes(pdfBytes);
@@ -256,82 +308,256 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     return await doc.save();
   }
 
-  void _abrirPreviewItem(int i) {
-    // A API não possui 6X1; usa 1X1 como base (mesmo do grid).
-    final size = _size.toUpperCase() == Constants.signSize6x1
-        ? Constants.signSize1x1
-        : _size;
-    Navigator.pushNamed(context, '/pdf_viewer', arguments: {
-      'printingData': _currentData(i).copyWith(size: size),
-    });
-  }
+  String get _titulo => _modoVencimentos
+      ? 'PAPELETA DE VENCIMENTOS'
+      : 'PAPELETA ${_size.toUpperCase()}';
 
-  void _abrirPreviewTodos() {
-    final sel = <PapeletaPrintingData>[];
-    final valList = <String>[];
-    for (int i = 0; i < _items.length; i++) {
-      if (!_mostrarCheckbox || _selected[i]) {
-        sel.add(_currentData(i).copyWith(size: _size));
-        valList.add(_ctrls[i].validade.text);
-      }
-    }
-    if (sel.isEmpty) {
-      ToastUtils.show(context, 'Nenhum item selecionado');
-      return;
-    }
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CompositePreviewScreen(
-          items: sel,
-          size: _size,
-          modoVencimentos: _modoVencimentos,
-          validades: valList,
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final previewH = (h * 0.55).clamp(280.0, 620.0);
+    return Scaffold(
+      backgroundColor: _kBg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _titulo,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: _kRed,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    _buildPreviewCard(previewH),
+                    if (_modoEditavel) _buildEditarItens(),
+                  ],
+                ),
+              ),
+            ),
+            _buildBottomBar(),
+          ],
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final title = _modoVencimentos
-        ? 'PAPELETA DE VENCIMENTOS'
-        : 'PAPELETA ${_size.toUpperCase()}';
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _items.isEmpty
-                ? const Center(child: Text('Nenhum dado disponível'))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _buildItemCard(i),
-                  ),
+  Widget _buildPreviewCard(double previewH) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
-          _buildBottomBar(),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Center(
+            child: Text(
+              'PRÉ-VISUALIZAÇÃO',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: _kRed,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: previewH,
+            color: _kPreviewBg,
+            child: _buildPreviewArea(),
+          ),
+          if (_mostrarOverlay) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () {
+                setState(() => _semOverlay = !_semOverlay);
+                _gerarPreview();
+              },
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: Checkbox(
+                      value: !_semOverlay,
+                      activeColor: _kRed,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) {
+                        setState(() => _semOverlay = !(v ?? false));
+                        _gerarPreview();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Usar overlay promocional',
+                      style: TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Text('Qtd. Cópias:',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 56,
+                height: 36,
+                child: TextField(
+                  controller: _copiaCtrl,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 2,
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (!_hideGerarPreview) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: _loadingPreview ? null : _gerarPreview,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kRed,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
+                child: Text(
+                  'GERAR PRÉ-VISUALIZAÇÃO ${_size.toUpperCase()}',
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildItemCard(int i) {
-    final d = _currentData(i);
+  Widget _buildPreviewArea() {
+    if (_loadingPreview) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Compondo pré-visualização...'),
+          ],
+        ),
+      );
+    }
+    if (_errorPreview != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(_errorPreview!, textAlign: TextAlign.center),
+        ),
+      );
+    }
+    if (_pages.isEmpty) {
+      return const Center(child: Text('Nada para exibir'));
+    }
+    return Stack(
+      children: [
+        PageView.builder(
+          itemCount: _pages.length,
+          onPageChanged: (i) => setState(() => _page = i),
+          itemBuilder: (_, i) => InteractiveViewer(
+            child: Image.memory(_pages[i], fit: BoxFit.contain),
+          ),
+        ),
+        Positioned(
+          top: 8,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '${_page + 1} / ${_pages.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditarItens() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        const Center(
+          child: Text(
+            'EDITAR ITENS',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: _kRed,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ..._items.asMap().entries.map((e) => _buildItemFormCard(e.key)),
+      ],
+    );
+  }
+
+  Widget _buildItemFormCard(int i) {
     return Card(
+      margin: const EdgeInsets.only(bottom: 10),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -340,68 +566,24 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
                 Container(
                   width: 4,
                   height: 20,
-                  color: AppColors.red,
+                  color: _kRed,
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'ITEM ${i + 1}',
-                    style: const TextStyle(
-                      color: AppColors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+                Text(
+                  'ITEM ${i + 1}',
+                  style: const TextStyle(
+                    color: _kRed,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
                 ),
-                if (_mostrarCheckbox)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Incluir'),
-                      Checkbox(
-                        value: _selected[i],
-                        activeColor: AppColors.primary,
-                        onChanged: (v) =>
-                            setState(() => _selected[i] = v ?? false),
-                      ),
-                    ],
-                  ),
               ],
             ),
-            const SizedBox(height: 6),
-            if (_modoEditavel) _buildEditableForm(i) else _buildSummary(d),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => _abrirPreviewItem(i),
-                icon: const Icon(Icons.visibility, size: 18),
-                label: const Text('Ver pré-visualização'),
-              ),
-            ),
+            _buildEditableForm(i),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSummary(PapeletaPrintingData d) {
-    final infos = <String>[
-      d.productName,
-      'Preço: R\$ ${d.price.toStringAsFixed(2)}',
-      if (d.promotionPrice != null) 'Promo: R\$ ${d.promotionPrice!.toStringAsFixed(2)}',
-      if (d.takeAndWinQuantity != null) 'Leve e Ganhe: ${d.takeAndWinQuantity}',
-      'EAN: ${d.ean}',
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: infos
-          .map((t) => Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(t,
-                    style: const TextStyle(fontSize: 13, color: Colors.black87)),
-              ))
-          .toList(),
     );
   }
 
@@ -453,8 +635,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: AppColors.cardBorder)),
+                    borderSide: const BorderSide(color: AppColors.cardBorder)),
               ),
             ),
           ),
@@ -464,8 +645,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
               child: field('Preço', c.price,
                   kb: const TextInputType.numberWithOptions(decimal: true)),
             ),
-            if (!ehComum)
-              const SizedBox(width: 8),
+            if (!ehComum) const SizedBox(width: 8),
             if (!ehComum)
               Expanded(
                 child: field('Preço Promocional', c.promo,
@@ -497,12 +677,12 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
 
   Widget _buildBottomBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 6,
             offset: const Offset(0, -2),
           ),
@@ -511,72 +691,55 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
       child: Column(
         children: [
           Row(
-            children: _sizes
-                .map((s) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: ChoiceChip(
-                          label: Text(s.replaceAll('X', '×'),
-                              textAlign: TextAlign.center),
-                          selected: _size == s,
-                          selectedColor: AppColors.primary,
-                          labelStyle: TextStyle(
-                            color: _size == s ? Colors.white : Colors.black87,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          onSelected: (_) => setState(() => _size = s),
-                        ),
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 10),
-          Row(
             children: [
-              if (!_hideGerarPreview)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _abrirPreviewTodos,
-                    icon: const Icon(Icons.preview),
-                    label:
-                        Text('GERAR PRÉ-VISUALIZAÇÃO ${_size.toUpperCase()}'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              if (!_hideGerarPreview) const SizedBox(width: 10),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _sending ? null : _imprimir,
-                  icon: const Icon(Icons.send),
-                  label:
-                      Text(_sending ? 'ENVIANDO...' : 'IMPRIMIR'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.green,
-                    foregroundColor: Colors.white,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _kRed,
+                    side: const BorderSide(color: _kRed),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
+                  child: const Text('VOLTAR',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _gerando ? null : _compartilharPdf,
-                  icon: const Icon(Icons.share),
-                  label: Text(_gerando ? 'GERANDO...' : 'COMPARTILHAR PDF'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.primary),
+                child: ElevatedButton(
+                  onPressed: _sending ? null : _imprimir,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kRed,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
+                  child: Text(_sending ? 'ENVIANDO...' : 'IMPRIMIR',
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
           ),
+          if (_multiMode) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton(
+                onPressed: _gerando ? null : _compartilharPdf,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kDarkRed,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
+                child: Text(_gerando ? 'GERANDO...' : 'COMPARTILHAR PDF',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -615,111 +778,6 @@ class _ItemCtrls {
     instPrice.dispose();
     ean.dispose();
     validade.dispose();
-  }
-}
-
-/// Pré-visualização paginada de todos os itens selecionados, gerando o PDF
-/// de cada um via API (equivalente à grade composta no Kotlin).
-class _PreviewAllScreen extends StatefulWidget {
-  final List<PapeletaPrintingData> items;
-  final String size;
-  const _PreviewAllScreen({required this.items, required this.size});
-
-  @override
-  State<_PreviewAllScreen> createState() => _PreviewAllScreenState();
-}
-
-class _PreviewAllScreenState extends State<_PreviewAllScreen> {
-  final ApiService api = ApiService(ApiClient.instance.getSlApiService());
-  final PageController _pageController = PageController();
-  int _page = 0;
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-            'Pré-visualização (${_page + 1}/${widget.items.length})'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: widget.items.length,
-        onPageChanged: (i) => setState(() => _page = i),
-        itemBuilder: (_, i) => _PreviewPage(
-          key: ValueKey(i),
-          api: api,
-          data: widget.items[i],
-        ),
-      ),
-    );
-  }
-}
-
-class _PreviewPage extends StatefulWidget {
-  final ApiService api;
-  final PapeletaPrintingData data;
-  const _PreviewPage({super.key, required this.api, required this.data});
-
-  @override
-  State<_PreviewPage> createState() => _PreviewPageState();
-}
-
-class _PreviewPageState extends State<_PreviewPage> {
-  late final WebViewController _controller;
-  bool _loading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted);
-    _generate();
-  }
-
-  Future<void> _generate() async {
-    try {
-      final bytes = await widget.api.previewPriceSign(widget.data);
-      if (!mounted) return;
-      final dataUrl =
-          'data:application/pdf;base64,${base64Encode(bytes)}';
-      await _controller.loadRequest(Uri.parse(dataUrl));
-    } on ApiException catch (e) {
-      if (e.statusCode == 401) {
-        SessionExpiredHandler.handleSessionExpired(context);
-      } else {
-        ToastUtils.showError(context, e.message);
-      }
-      if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Erro ao gerar PDF');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(_error!, style: AppTextStyles.body),
-        ),
-      );
-    }
-    return WebViewWidget(controller: _controller);
   }
 }
 
