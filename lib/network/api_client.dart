@@ -71,8 +71,8 @@ class ApiClient {
     slDio = Dio(BaseOptions(
       baseUrl: ApiUrls.baseUrlSl,
       connectTimeout: const Duration(seconds: 30),
-      readTimeout: const Duration(seconds: 30),
-      writeTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
     ));
     slDio.interceptors.addAll([
       AuthInterceptor(sessionManager),
@@ -87,8 +87,8 @@ class ApiClient {
     minhaLojaDio = Dio(BaseOptions(
       baseUrl: ApiUrls.baseUrlMinhaloja,
       connectTimeout: const Duration(seconds: 30),
-      readTimeout: const Duration(seconds: 30),
-      writeTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
     ));
     minhaLojaDio.interceptors.addAll([
       AuthInterceptor(sessionManager),
@@ -108,8 +108,8 @@ class ApiClient {
     final d = Dio(BaseOptions(
       baseUrl: ApiUrls.baseUrlSl,
       connectTimeout: const Duration(seconds: 30),
-      readTimeout: const Duration(seconds: 30),
-      writeTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
     ));
     d.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {

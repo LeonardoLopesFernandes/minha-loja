@@ -29,8 +29,8 @@ class DeviceCodeInfo {
 class MicrosoftOAuth {
   static final Dio _http = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 30),
-    readTimeout: const Duration(seconds: 30),
-    writeTimeout: const Duration(seconds: 30),
+    receiveTimeout: const Duration(seconds: 30),
+    sendTimeout: const Duration(seconds: 30),
   ));
 
   static String? ultimoErro;

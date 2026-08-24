@@ -20,7 +20,7 @@ class PapeletasDiariasScreen extends StatefulWidget {
 
 class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
   final ApiService _api = ApiService(ApiClient.instance.getSlApiService());
-  final SessionManager _session = SessionManager._instance!;
+  final SessionManager _session = SessionManager.instance!;
 
   late String _store;
   late String _startDate;

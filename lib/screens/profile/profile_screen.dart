@@ -11,7 +11,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final SessionManager _session = SessionManager._instance!;
+  final SessionManager _session = SessionManager.instance!;
 
   String get _nome => _session.getUserName() ?? 'Usuário';
   String get _email => _session.getUserEmail() ?? 'email@exemplo.com';

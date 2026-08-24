@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _showForm = false;
   bool _reconectando = false;
 
-  final SessionManager _session = SessionManager._instance!;
+  final SessionManager _session = SessionManager.instance!;
 
   @override
   void initState() {

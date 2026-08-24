@@ -57,7 +57,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
   @override
   void initState() {
     super.initState();
-    _storeId = SessionManager._instance?.getUserStore() ?? Constants.defaultStore;
+    _storeId = SessionManager.instance?.getUserStore() ?? Constants.defaultStore;
     _today = _formatToday();
   }
 

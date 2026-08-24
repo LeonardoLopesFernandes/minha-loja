@@ -16,7 +16,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _menuOpen = false;
   int _currentBody = 0; // 0 = Etiquetas, 1 = Papeletas
 
-  final SessionManager _session = SessionManager._instance!;
+  final SessionManager _session = SessionManager.instance!;
 
   final List<_MenuItem> _menuItems = const [
     _MenuItem('ETIQUETAS', Icons.label),

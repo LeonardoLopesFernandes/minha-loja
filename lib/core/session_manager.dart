@@ -10,13 +10,13 @@ class SessionManager {
   static const String _keyMsPassword = "MS_PASSWORD";
   static const int tokenExpiryDays = 14;
 
-  static SessionManager? _instance;
+  static SessionManager? instance;
   static SharedPreferences? _prefs;
 
   static Future<SessionManager> getInstance() async {
     _prefs ??= await SharedPreferences.getInstance();
-    _instance ??= SessionManager._();
-    return _instance!;
+    instance ??= SessionManager._();
+    return instance!;
   }
 
   SessionManager._();
@@ -54,7 +54,7 @@ class SessionManager {
   void clearToken() {
     _prefs!.remove(_keyBearerToken);
     _prefs!.remove(_keyTokenExpiry);
-    _prefs!.putBool(_keyRememberLogin, false);
+    _prefs!.setBool(_keyRememberLogin, false);
   }
 
   void saveUserInfo(String email, String name, String store) {

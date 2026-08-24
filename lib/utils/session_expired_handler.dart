@@ -6,7 +6,7 @@ class SessionExpiredHandler {
   static void handleSessionExpired(BuildContext context) {
     try {
       LogHelper.d("SessionExpiredHandler: Redirecionando para login...");
-      final sessionManager = SessionManager._instance;
+      final sessionManager = SessionManager.instance;
       sessionManager?.clearToken();
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
       LogHelper.d("SessionExpiredHandler: Redirecionamento concluído");

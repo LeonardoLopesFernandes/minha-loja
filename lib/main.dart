@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       initialRoute:
-          SessionManager._instance?.isLoggedIn() == true ? '/main' : '/login',
+          SessionManager.instance?.isLoggedIn() == true ? '/main' : '/login',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/main': (context) => const MainScreen(),

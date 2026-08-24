@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:minhaloja/core/constants.dart';
 import 'package:minhaloja/core/session_manager.dart';
+import 'package:minhaloja/core/theme.dart';
 import 'package:minhaloja/models/models.dart';
 import 'package:minhaloja/network/api_client.dart';
 import 'package:minhaloja/network/api_service.dart';
@@ -19,7 +20,7 @@ class ModeloEditavelScreen extends StatefulWidget {
 
 class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   final ApiService api = ApiService(ApiClient.instance.getSlApiService());
-  final SessionManager session = SessionManager._instance!;
+  final SessionManager session = SessionManager.instance!;
 
   PapeletaPrintingData? _data;
   bool _loading = true;

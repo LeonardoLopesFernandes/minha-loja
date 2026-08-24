@@ -31,7 +31,7 @@ class _LoginWebViewScreenState extends State<LoginWebViewScreen> {
   Timer? _injectTimer;
   Timer? _timeoutTimer;
 
-  final SessionManager _session = SessionManager._instance!;
+  final SessionManager _session = SessionManager.instance!;
 
   @override
   void didChangeDependencies() {
@@ -108,7 +108,7 @@ class _LoginWebViewScreenState extends State<LoginWebViewScreen> {
     }
 
     try {
-      final cookies = await _controller.getCookies();
+      final cookies = await WebViewCookieManager().getCookies(url);
       for (final c in cookies) {
         if ((c.name == 'newToken' || c.name == 'token') &&
             (c.value?.length ?? 0) > 50) {
