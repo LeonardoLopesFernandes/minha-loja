@@ -506,6 +506,23 @@ Future<img.Image> _drawVencimento(
   final validaTexto = validade.length == 8 
       ? '${validade.substring(0, 2)}/${validade.substring(2, 4)}/${validade.substring(4)}' 
       : validade.trim();
+  // Centro X do conteúdo (equivalente ao centroXConteudo do MLoja): o texto
+  // acompanha o eixo do conteúdo do card, ficando centralizado sobre ele
+  // após o deslocamento do centralizarConteudo.
+  int cxMin = raster.width;
+  int cxMax = -1;
+  for (int yy = 0; yy < raster.height; yy += 6) {
+    for (int xx = 0; xx < raster.width; xx += 3) {
+      final p = raster.getPixel(xx, yy);
+      if (p.a > 8 && (p.r < 250 || p.g < 250 || p.b < 250)) {
+        if (xx < cxMin) cxMin = xx;
+        if (xx > cxMax) cxMax = xx;
+      }
+    }
+  }
+  final double centroX = (cxMax <= cxMin)
+      ? w / 2
+      : ((cxMin + cxMax + 1) / 2) * (w / raster.width);
   // Posicionamento da validade: mesma lógica do MLoja (localizar primeira banda + 
   // deslocamento + coerção para faixa h*0.28 até h*0.45).
   // Aqui usamos o centro da célula (w/2) e deslocamento 0.28h — mais acima,
@@ -515,9 +532,9 @@ Future<img.Image> _drawVencimento(
   // Rodapé: um pouco mais pra cima (0.88h) e fonte maior (w / 32).
   final yFooter = h * 0.88;
   _drawCentered(canvas, w, yVal, 'VAL.: $validaTexto'.toUpperCase(),
-      fontSize: w / 18, bold: true);
+      fontSize: w / 18, bold: true, centerX: centroX);
   _drawCentered(canvas, w, yFooter, 'PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO',
-      fontSize: (w / 32).clamp(8, 26).toDouble(), bold: true);
+      fontSize: (w / 32).clamp(8, 26).toDouble(), bold: true, centerX: centroX);
   final picture = recorder.endRecording();
   final out = await picture.toImage(w, h);
   final pngOut = (await out.toByteData(format: ui.ImageByteFormat.png))!
@@ -528,7 +545,7 @@ Future<img.Image> _drawVencimento(
 }
 
 void _drawCentered(ui.Canvas canvas, int w, double y, String text,
-    {required double fontSize, required bool bold}) {
+    {required double fontSize, required bool bold, double? centerX}) {
   final tp = TextPainter(
     text: TextSpan(
       text: text,
@@ -541,7 +558,7 @@ void _drawCentered(ui.Canvas canvas, int w, double y, String text,
     textAlign: TextAlign.center,
     textDirection: TextDirection.ltr,
   )..layout(minWidth: 0, maxWidth: w.toDouble());
-  tp.paint(canvas, Offset((w - tp.width) / 2, y - tp.height / 2));
+  tp.paint(canvas, Offset(centerX ?? (w - tp.width) / 2, y - tp.height / 2));
 }
 
 String _formatValidade(String v) {
