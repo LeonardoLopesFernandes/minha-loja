@@ -13,9 +13,11 @@ import 'screens/profile/profile_screen.dart';
 import 'screens/modelo/modelo_editavel_screen.dart';
 import 'screens/barcode/barcode_scanner_screen.dart';
 import 'core/theme.dart';
+import 'utils/crash_logger.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  CrashLogger.install();
   final sessionManager = await SessionManager.getInstance();
   await sessionManager.getToken();
   ApiClient.instance.init(sessionManager);
@@ -29,14 +31,24 @@ Future<void> main() async {
       child: const MyApp(),
     ),
   );
+
+  // Após o primeiro frame, oferece o compartilhamento do último crash.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final ctx = MyApp.navigatorKey.currentContext;
+    if (ctx != null) CrashLogger.promptIfCrashed(ctx);
+  });
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Minha Loja',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,

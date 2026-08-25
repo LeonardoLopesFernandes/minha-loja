@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfRenderer
+import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity
@@ -22,6 +23,24 @@ import kotlin.math.roundToInt
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "minhaloja/pdf"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Captura qualquer exceção Java/Kotlin não tratada (incluindo OOM)
+        // em arquivo acessível, antes do handler padrão do sistema.
+        val prevHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                val dir = getExternalFilesDir(null) ?: filesDir
+                File(dir, "ultimo_crash_native.txt").appendText(
+                    "[${System.currentTimeMillis()}] thread=${t.name}\n" +
+                        android.util.Log.getStackTraceString(e) + "\n\n"
+                )
+            } catch (_: Throwable) {
+            }
+            prevHandler?.uncaughtException(t, e)
+        }
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
