@@ -218,24 +218,18 @@ Future<List<Uint8List>> buildCompositePages({
         isLandscape ? 0.015 : (cols == 2 && rows == 2 ? 0.01 : 0.03);
     final shiftYMulti = isLandscape ? 0.015 : 0.03;
 
-    // Rasteriza os cards da página em PARALELO com limite de concorrência
-    // (mesma estratégia do MLoja, que dispara as chamadas à API via
-    // coroutines). O limite contém o pico de memória de bitmaps grandes e as
-    // chamadas ao canal nativo minhaloja/pdf (que já são serializadas na
-    // thread principal do Android). O desenho da validade (picture.toImage)
-    // permanece SEQUENCIAL — era a fonte de crash quando concorrente.
-    // Cada item que falhar é ignorado (null) em vez de derrubar a página.
+    // Pipeline anti-OOM: busca+render em PARALELO com concorrência 2 (mesma
+    // estratégia das coroutines do MLoja), mas a COMPOSIÇÃO de cada célula é
+    // encadeada de forma SERIAL à medida que os rasters ficam prontos. Assim
+    // nunca há todos os bitmaps da página vivos ao mesmo tempo — o pico fica
+    // em ~2 rasters + a página. Era isso que estourava memória e crashava,
+    // sobretudo no Vencimentos (que ainda adiciona a camada de texto/célula).
     final pageIdx = <int>[];
     for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
       pageIdx.add(idx);
     }
-    final rasters = await _rasterizarPagina(
-        api, items, validades, pageIdx, halfW, halfH);
 
-    for (int k = 0; k < pageIdx.length; k++) {
-      final idx = pageIdx[k];
-      final raster = rasters[k];
-      if (raster == null) continue;
+    Future<void> compor(img.Image raster, int idx) async {
       final item = items[idx];
       final local = idx % gridCap;
       final col = local % cols;
@@ -245,28 +239,26 @@ Future<List<Uint8List>> buildCompositePages({
       final ehComum = _ehComum(item);
 
       if (modoVencimentos) {
-        // Vencimentos: o overlay (em tamanho nativo, correto nos assets)
-        // já foi composto em toda a página acima. Por célula, apenas
-        // escondemos o overlay nas comuns (fundo branco); as não-comuns
-        // mantêm o overlay nativo da página. Antes o overlay era desenhado
-        // novamente, escalado, por célula — duplicando/distorcendo em
-        // 2x1/4x1/6x1.
+        // Overlay nativo da página; comum recebe fundo branco por célula.
         if (ehComum && !semOverlay && overlay != null) {
           _fillCell(base, left, top, halfW, halfH);
         }
         final ignorar = ehComum ? 0.03 : 0.0;
         final maxShift = ehComum ? 1.0 : 0.35;
         final shiftY = ehComum ? 0.0 : shiftYVenc;
-        _centralizarConteudo(
-            base, raster, halfW, halfH, left, top, maxShift, ignorar, shiftY);
-        // Validade/rodapé por cima, centrados na célula (não afetam o dx
-        // do conteúdo da API).
+        _centralizarConteudo(base, raster, halfW, halfH, left, top, maxShift,
+            ignorar, shiftY);
+        // Validade/rodapé por cima, centrados na célula.
         final vTxt = validades.length > idx ? validades[idx] : '';
         if (vTxt.trim().isNotEmpty) {
-          final layer =
-              await _camadaTextosVencimento(halfW, halfH, vTxt.trim());
-          img.compositeImage(base, layer,
-              dstX: left, dstY: top, dstW: halfW, dstH: halfH);
+          try {
+            final layer =
+                await _camadaTextosVencimento(halfW, halfH, vTxt.trim());
+            img.compositeImage(base, layer,
+                dstX: left, dstY: top, dstW: halfW, dstH: halfH);
+          } catch (e) {
+            LogHelper.e('Composite: erro camada validade item $idx', e);
+          }
         }
       } else {
         // Multi: overlay cobre a página toda; comum recebe fundo branco.
@@ -274,15 +266,32 @@ Future<List<Uint8List>> buildCompositePages({
           _fillCell(base, left, top, halfW, halfH);
         }
         final ignorar = ehComum ? 0.03 : 0.0;
-        final maxShift = 1.0;
-        final shiftY = ehComum ? 0.0 : shiftYMulti;
-        _centralizarConteudo(
-            base, raster, halfW, halfH, left, top, maxShift, ignorar, shiftY);
+        _centralizarConteudo(base, raster, halfW, halfH, left, top, 1.0,
+            ignorar, ehComum ? 0.0 : shiftYMulti);
       }
-      // Libera o raster da célula imediatamente após compor (contém a memória
-      // em páginas com muitas etiquetas).
-      rasters[k] = null;
     }
+
+    Future<void> composeChain = Future.value();
+    var next = 0;
+    Future<void> worker() async {
+      while (true) {
+        final i = next++;
+        if (i >= pageIdx.length) return;
+        final idx = pageIdx[i];
+        img.Image? r;
+        try {
+          r = await _rasterizeCard(api, items[idx], halfW, halfH);
+        } catch (e) {
+          LogHelper.e('Composite: erro item $idx', e);
+        }
+        if (r == null) continue;
+        final raster = r;
+        composeChain = composeChain.then((_) => compor(raster, idx));
+      }
+    }
+
+    await Future.wait(List.generate(2, (_) => worker()));
+    await composeChain;
     out.add(img.encodePng(base));
   }
   return out;
