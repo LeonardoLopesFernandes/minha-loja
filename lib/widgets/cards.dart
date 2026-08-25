@@ -315,7 +315,7 @@ class _PapeletaCardState extends State<PapeletaCard> {
                 Expanded(
                   child: Text(widget.item.description,
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.bold, color: _descDark2)),
+                          fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
                 ),
                 IconButton(
                   onPressed: () => widget.onImprimir(int.tryParse(_qty.text) ?? 1),
@@ -426,20 +426,20 @@ class _PapeletaCardState extends State<PapeletaCard> {
 
 Widget _qtyBox(TextEditingController c, ValueChanged<int> onChange) {
   return SizedBox(
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: _red, width: 1),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: TextField(
         controller: c,
         textAlign: TextAlign.center,
         textAlignVertical: TextAlignVertical.center,
         keyboardType: TextInputType.number,
-        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _descDark2),
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
         decoration: const InputDecoration(
           border: InputBorder.none,
           isCollapsed: true,
