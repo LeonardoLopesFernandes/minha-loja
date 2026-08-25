@@ -203,10 +203,39 @@ Future<List<Uint8List>> buildCompositePages({
     final halfW = (ovW / cols).floor();
     final halfH = (ovH / rows).floor();
 
-    final shiftYVenc =
-        cols > rows ? 0.015 : (cols == 2 && rows == 2 ? 0.01 : 0.03);
+    // Deslocamento vertical único (unificado) para todos os tamanhos,
+    // evitando que o conteúdo fique em alturas diferentes conforme o
+    // tamanho selecionado no spinner (antes variava 0,015/0,01/0,03).
+    final shiftYVenc = 0.015;
 
+    // Rasteriza os cards da página em PARALELO (rede + render nativo) para
+    // acelerar a geração da pré-visualização (antes era sequencial, item a
+    // item). A composição abaixo continua idêntica e em resolução nativa.
+    final pageIdx = <int>[];
     for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
+      pageIdx.add(idx);
+    }
+    final rasters = await Future.wait(pageIdx.map((idx) async {
+      final item = items[idx];
+      final validade = validades.length > idx ? validades[idx] : null;
+      img.Image? r;
+      try {
+        r = await _rasterizeCard(api, item, halfW, halfH);
+      } catch (e) {
+        LogHelper.e('Composite: erro item $idx', e);
+        return null;
+      }
+      if (r == null) return null;
+      if (modoVencimentos && validade != null && validade.trim().isNotEmpty) {
+        r = await _drawVencimento(r, validade.trim(), halfW, halfH);
+      }
+      return r;
+    }));
+
+    for (int k = 0; k < pageIdx.length; k++) {
+      final idx = pageIdx[k];
+      final raster = rasters[k];
+      if (raster == null) continue;
       final item = items[idx];
       final local = idx % gridCap;
       final col = local % cols;
@@ -214,21 +243,6 @@ Future<List<Uint8List>> buildCompositePages({
       final left = col * halfW;
       final top = row * halfH;
       final ehComum = _ehComum(item);
-      final validade = validades.length > idx ? validades[idx] : null;
-
-      img.Image? raster;
-      try {
-        raster = await _rasterizeCard(api, item, halfW, halfH);
-      } catch (e) {
-        LogHelper.e('Composite: erro item $idx', e);
-      }
-      if (raster == null) continue;
-
-      if (modoVencimentos &&
-          validade != null &&
-          validade.trim().isNotEmpty) {
-        raster = await _drawVencimento(raster, validade.trim(), halfW, halfH);
-      }
 
       if (modoVencimentos) {
         // Vencimentos: overlay é desenhado por célula (apenas não-comum).
@@ -250,7 +264,9 @@ Future<List<Uint8List>> buildCompositePages({
           _fillCell(base, left, top, halfW, halfH);
         }
         final ignorar = ehComum ? 0.03 : 0.0;
-        final shiftY = ehComum ? 0.0 : (cols > rows ? 0.015 : 0.03);
+        // Deslocamento vertical único (unificado) para todos os tamanhos,
+        // igual ao Vencimentos, evitando alturas diferentes por tamanho.
+        final shiftY = ehComum ? 0.0 : 0.015;
         _centralizarConteudo(
             base, raster, halfW, halfH, left, top, 0.35, ignorar, shiftY);
       }
