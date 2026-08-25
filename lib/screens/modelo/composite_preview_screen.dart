@@ -218,6 +218,71 @@ Future<List<Uint8List>> buildCompositePages({
         isLandscape ? 0.015 : (cols == 2 && rows == 2 ? 0.01 : 0.03);
     final shiftYMulti = isLandscape ? 0.015 : 0.03;
 
+    // ---- Caminho NATIVO (rápido, igual ao MLoja): os PNGs das células são
+    // compostos no Kotlin em um único Canvas — sem loops de pixel em Dart e
+    // com um único encode de PNG por página. Qualidade idêntica (mesmo
+    // render da API via PdfRenderer). Se falhar, cai no pipeline legado em
+    // Dart logo abaixo.
+    try {
+      final idxN = <int>[];
+      for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
+        idxN.add(idx);
+      }
+      final cellPng = List<Uint8List?>.filled(idxN.length, null);
+      var nx = 0;
+      Future<void> wk() async {
+        while (true) {
+          final i = nx++;
+          if (i >= idxN.length) return;
+          final idx = idxN[i];
+          try {
+            cellPng[i] = await _renderPdfPng(api, items[idx], halfW, halfH);
+          } catch (e) {
+            LogHelper.e('Composite: erro item $idx', e);
+          }
+        }
+      }
+
+      await Future.wait(List.generate(2, (_) => wk()));
+      final multiCellN = cols * rows > 1;
+      final comums = <int>[];
+      final tops = <double>[];
+      final vds = <String>[];
+      final payload = <Uint8List>[];
+      for (var i = 0; i < idxN.length; i++) {
+        final idx = idxN[i];
+        final comum = _ehComum(items[idx]);
+        comums.add(comum ? 1 : 0);
+        tops.add(
+            comum ? (multiCellN ? 0.39 : 0.36) : (multiCellN ? 0.28 : 0.25));
+        vds.add(validades.length > idx ? validades[idx] : '');
+        payload.add(cellPng[i] ?? Uint8List(0));
+      }
+      final res = await _pdfChannel.invokeMethod<Map<dynamic, dynamic>>(
+          'composePage', {
+        'cells': payload,
+        'cols': cols,
+        'rows': rows,
+        'overlay': 'assets/overlays/${s.toLowerCase()}.png',
+        'semOverlay': semOverlay,
+        'vencimentos': modoVencimentos,
+        'comums': comums,
+        'topFracs': tops,
+        'validades': vds,
+        'shiftVenc': shiftYVenc,
+        'shiftMulti': shiftYMulti,
+      });
+      final png = res?['bytes'] as Uint8List?;
+      if (png != null && png.isNotEmpty) {
+        out.add(png);
+        continue;
+      }
+    } catch (e) {
+      LogHelper.e(
+          'Composite: composePage nativo falhou; usando pipeline Dart',
+          e.toString());
+    }
+
     // Pipeline anti-OOM: busca+render em PARALELO com concorrência 2 (mesma
     // estratégia das coroutines do MLoja), mas a COMPOSIÇÃO de cada célula é
     // encadeada de forma SERIAL à medida que os rasters ficam prontos. Assim
@@ -510,6 +575,21 @@ Future<img.Image?> _rasterizeCard(
 }
 
 const _pdfChannel = MethodChannel('minhaloja/pdf');
+
+/// Renderiza o PDF da API via canal nativo e devolve o PNG cru (sem
+/// decodificar em Dart) — usado pela composição nativa da página.
+Future<Uint8List?> _renderPdfPng(
+    ApiService api, PapeletaPrintingData data, int w, int h) async {
+  final bytes =
+      await api.previewPriceSign(data.copyWith(size: Constants.signSize1x1));
+  final res = await _pdfChannel.invokeMethod<Map<dynamic, dynamic>>(
+      'renderPdfToRgba', {'bytes': bytes, 'w': w, 'h': h});
+  if (res == null) return null;
+  final rw = res['width'] as int? ?? 0;
+  final b = res['bytes'] as Uint8List?;
+  if (rw <= 0 || b == null || b.isEmpty) return null;
+  return b;
+}
 
 /// Renderiza o PDF da API usando o PdfRenderer do Android (igual ao MLoja),
 /// retornando o bitmap em PNG (compacto). Retorna null se o canal não

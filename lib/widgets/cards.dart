@@ -121,7 +121,7 @@ class _EtiquetaCardState extends State<EtiquetaCard> {
                 Expanded(
                   child: Text(widget.tag.description,
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.bold, color: _descDark2)),
+                          fontSize: 14, fontWeight: FontWeight.w900, color: _descDark2)),
                 ),
                 IconButton(
                   onPressed: () => widget.onImprimir(int.tryParse(_qty.text) ?? 1),
@@ -315,7 +315,7 @@ class _PapeletaCardState extends State<PapeletaCard> {
                 Expanded(
                   child: Text(widget.item.description,
                       style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
+                          fontSize: 14, fontWeight: FontWeight.w900, color: Colors.black)),
                 ),
                 IconButton(
                   onPressed: () => widget.onImprimir(int.tryParse(_qty.text) ?? 1),
