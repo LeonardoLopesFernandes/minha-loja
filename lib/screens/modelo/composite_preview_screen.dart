@@ -90,6 +90,8 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
       setState(() {
         _loading = false;
       });
+      await CrashLogger
+          .step('exibindo ${_pages.length} pagina(s)');
     } catch (e) {
       LogHelper.e('Composite: erro geral', e);
       if (mounted) {
@@ -154,6 +156,10 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
             fit: BoxFit.contain,
             cacheWidth: cw,
             gaplessPlayback: true,
+            errorBuilder: (_, e, __) {
+              CrashLogger.write('ImageDecode', 'pagina $i: $e');
+              return const Icon(Icons.broken_image, size: 64);
+            },
           ),
         );
       },
@@ -312,14 +318,21 @@ Future<List<Uint8List>> buildCompositePages({
       });
       await CrashLogger.step('composePage ok pagina $p');
       final path = res?['path'] as String?;
+      await CrashLogger.step('path recebido pagina $p: ${path == null}');
       if (path != null && path.isNotEmpty) {
         final f = File(path);
         await CrashLogger.step('lendo arquivo pagina $p');
         out.add(await f.readAsBytes());
-        await f.delete();
+        try {
+          await f.delete();
+        } catch (_) {
+          await CrashLogger.step('delete falhou pagina $p (seguindo)');
+        }
         continue;
       }
     } catch (e) {
+      await CrashLogger.write(
+          'ComposeFallback', 'pagina $p: $e');
       LogHelper.e(
           'Composite: composePage nativo falhou; usando pipeline Dart',
           e.toString());
