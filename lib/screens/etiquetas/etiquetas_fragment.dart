@@ -74,6 +74,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
   List<PriceTag> _tags = [];
 
   bool _loading = false;
+  bool _fabNoLugar = false;
 
   final TextEditingController _eanController = TextEditingController();
   String _buscaTipo = 'EAN';
@@ -541,11 +542,24 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
         Positioned(
           right: 24,
           bottom: 24,
-          child: FloatingActionButton(
-            backgroundColor: const Color(0xFFD32F2F),
-            onPressed: _addByScan,
-            child: Image.asset('assets/icons/ic_scanner.png',
-                width: 24, height: 24, color: Colors.white),
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            // Igual ao MLoja: começa um pouco pro lado; 1º clique volta à
+            // posição original, 2º clique abre o scanner.
+            offset: _fabNoLugar ? Offset.zero : const Offset(0.6, 0),
+            child: FloatingActionButton(
+              backgroundColor: const Color(0xFFD32F2F),
+              onPressed: () {
+                if (!_fabNoLugar) {
+                  setState(() => _fabNoLugar = true);
+                  return;
+                }
+                _addByScan();
+              },
+              child: Image.asset('assets/icons/ic_scanner.png',
+                  width: 24, height: 24, color: Colors.white),
+            ),
           ),
         ),
       ],

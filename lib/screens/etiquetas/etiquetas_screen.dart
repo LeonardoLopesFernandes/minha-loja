@@ -162,8 +162,10 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
       _selectedDepartments.length == _departments.length;
 
   void _onNextDay() {
-    final next = _fromApi(_currentDate).add(const Duration(days: 1));
-    _currentDate = _toApi(next);
+    setState(() {
+      final next = _fromApi(_currentDate).add(const Duration(days: 1));
+      _currentDate = _toApi(next);
+    });
     _loadInit();
   }
 
@@ -488,7 +490,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
           )
         else
           ..._items.map((it) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: PriceTagCard(
                   tag: it,
                   onChangedCheckbox: (v) => _onItemCheck(it, v),

@@ -526,12 +526,13 @@ class _PriceTagCardState extends State<PriceTagCard> {
     final showPrice = b.price != null;
     final showPromo = b.promo != null;
     return Card(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: 2),
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: _cardBorder),
       ),
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
@@ -710,12 +711,13 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
     final showPrice = b.price != null;
     final showPromo = b.promo != null;
     return Card(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: 2),
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: _cardBorder),
       ),
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
