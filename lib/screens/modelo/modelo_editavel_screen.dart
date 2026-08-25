@@ -177,7 +177,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         modoVencimentos: _modoVencimentos,
         validades: _validades(),
         semOverlay: _semOverlay,
-        previewScale: 0.5,
+        previewScale: 1.0,
       );
       _page = 0;
       if (mounted) setState(() => _loadingPreview = false);

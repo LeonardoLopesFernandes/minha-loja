@@ -80,7 +80,7 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
         size: widget.size,
         modoVencimentos: widget.modoVencimentos,
         validades: widget.validades,
-        previewScale: 0.5,
+        previewScale: 1.0,
       );
       if (!mounted) return;
       setState(() {
@@ -479,11 +479,23 @@ Future<img.Image> _drawVencimento(
     Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
     ui.Paint(),
   );
-  final valText = 'VAL.: ${_formatValidade(validade)}'.toUpperCase();
-  _drawCentered(canvas, w, h * 0.34, valText,
-      fontSize: (w * 0.05).clamp(14, 48).toDouble(), bold: true);
-  _drawCentered(canvas, w, h * 0.93, 'PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO',
-      fontSize: (w * 0.028).clamp(8, 26).toDouble(), bold: true);
+  // Formata a validade: se tiver 8 dígitos, forma DD/MM/YYYY, caso contrário, trimado
+  final validaTexto = validade.length == 8 
+      ? '${validade.substring(0, 2)}/${validade.substring(2, 4)}/${validade.substring(4)}' 
+      : validade.trim();
+  // Posicionamento da validade: mesma lógica do MLoja (localizar primeira banda + 
+  // deslocamento + coerção para faixa h*0.28 até h*0.45).
+  // Aqui usamos o centro da célula (w/2) e deslocamento 0.34h, que está dentro 
+  // da faixa do MLoja.
+  final yVal = h * 0.34;
+  // Rodapé: posição fixa em todos os tamanhos, igual ao MLoja.
+  // A fórmula do MLoja considera as métricas da fonte, mas a posição h*0.93 com 
+  // ajuste aproximado fica próxima do original.
+  final yFooter = h * 0.93;
+  _drawCentered(canvas, w, yVal, 'VAL.: $validaTexto'.toUpperCase(),
+      fontSize: (w / 320).clamp(14, 48).toDouble(), bold: true);
+  _drawCentered(canvas, w, yFooter, 'PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO',
+      fontSize: (w / 35.5).clamp(8, 26).toDouble(), bold: true);
   final picture = recorder.endRecording();
   final out = await picture.toImage(w, h);
   final pngOut = (await out.toByteData(format: ui.ImageByteFormat.png))!
