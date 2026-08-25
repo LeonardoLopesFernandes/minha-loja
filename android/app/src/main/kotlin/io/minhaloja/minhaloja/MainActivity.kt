@@ -134,6 +134,16 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    /** Breadcrumb nativo com flush imediato (diagnóstico de crash seco). */
+    private fun bstep(msg: String) {
+        try {
+            val dir = getExternalFilesDir(null) ?: filesDir
+            File(dir, "passos_native.txt")
+                .appendText("[${System.currentTimeMillis()}] $msg\n")
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun assetBytes(name: String): ByteArray? = try {
         val key = FlutterInjector.instance().flutterLoader().getLookupKeyForAsset(name)
         assets.open(key).use { it.readBytes() }
@@ -166,8 +176,10 @@ class MainActivity : FlutterActivity() {
     ): Map<String, Any> {
         val ovW = cellW * cols
         val ovH = cellH * rows
+        bstep("compose start n=${pdfs.size} ${ovW}x$ovH fmt=$format")
 
         val page = Bitmap.createBitmap(ovW, ovH, Bitmap.Config.ARGB_8888)
+        bstep("bitmap pagina criado")
         val cv = Canvas(page)
         cv.drawColor(Color.WHITE)
 
@@ -183,8 +195,10 @@ class MainActivity : FlutterActivity() {
         val whitePaint = Paint().apply { color = Color.WHITE }
 
         for (i in pdfs.indices) {
+            bstep("celula $i render inicio")
             val bmp = renderPdfToBitmap(pdfs[i], cellW, cellH) ?: continue
             removerBrancoSuave(bmp)
+            bstep("celula $i ok ${bmp.width}x${bmp.height}")
 
             val left = (i % cols) * cellW.toFloat()
             val top = (i / cols) * cellH.toFloat()
@@ -211,10 +225,12 @@ class MainActivity : FlutterActivity() {
         // é opaca, então não há perda de transparência. Impressão/PDF usa PNG.
         val isJpeg = format.equals("jpeg", ignoreCase = true)
         val out = File(cacheDir, "page_${System.nanoTime()}.${if (isJpeg) "jpg" else "png"}")
+        bstep("encode inicio")
         FileOutputStream(out).use {
             if (isJpeg) page.compress(Bitmap.CompressFormat.JPEG, 92, it)
             else page.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
+        bstep("encode ok")
         val res =
             mapOf<String, Any>("path" to out.absolutePath, "width" to page.width, "height" to page.height)
         page.recycle()

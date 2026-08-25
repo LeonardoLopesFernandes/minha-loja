@@ -11,6 +11,19 @@ import 'package:share_plus/share_plus.dart';
 /// compartilhamento do log.
 class CrashLogger {
   static const _name = 'ultimo_crash.txt';
+  static const _stepsName = 'passos_dart.txt';
+
+  /// Registra um passo do fluxo (breadcrumb) com flush imediato — se o
+  /// processo morrer, o último passo indica onde o crash ocorreu.
+  static Future<void> step(String msg) async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final f = File('${dir.path}/$_stepsName');
+      final ts = DateTime.now().toIso8601String();
+      await f.writeAsString('[$ts] $msg\n',
+          mode: FileMode.append, flush: true);
+    } catch (_) {}
+  }
 
   static Future<File> _file() async {
     final dir = await getApplicationSupportDirectory();
@@ -58,24 +71,48 @@ class CrashLogger {
     };
   }
 
-  /// Se existe log de crash, mostra diálogo para compartilhar/limpar.
+  /// Se existe qualquer log (erro ou breadcrumbs), oferece o envio.
   static Future<void> promptIfCrashed(BuildContext context) async {
-    final content = await readLast();
-    if (content == null || !context.mounted) return;
+    final support = await getApplicationSupportDirectory();
+    final externals = await getExternalStorageDirectories();
+    final nativeDir = (externals != null && externals.isNotEmpty)
+        ? externals.first.path
+        : null;
+    final files = <XFile>[];
+    for (final p in [
+      '${support.path}/$_name',
+      '${support.path}/$_stepsName',
+      if (nativeDir != null) '$nativeDir/passos_native.txt',
+    ]) {
+      try {
+        final f = File(p);
+        if (await f.exists() && (await f.length()) > 0) {
+          files.add(XFile(p, mimeType: 'text/plain'));
+        }
+      } catch (_) {}
+    }
+    if (files.isEmpty || !context.mounted) return;
     final res = await showDialog<_CrashAction>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Último crash registrado'),
         content: const Text(
-            'Encontramos o registro do último travamento.\n'
-            'Compartilhe o arquivo com o suporte para correção exata.'),
+            'Encontramos registros do último travamento.\n'
+            'Compartilhe com o suporte — isso aponta a causa exata.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, _CrashAction.ignore),
             child: const Text('Agora não'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, _CrashAction.clear),
+            onPressed: () async {
+              for (final f in files) {
+                try {
+                  await File(f.path).writeAsString('', flush: true);
+                } catch (_) {}
+              }
+              if (ctx.mounted) Navigator.pop(ctx, _CrashAction.clear);
+            },
             child: const Text('Limpar'),
           ),
           FilledButton(
@@ -88,14 +125,9 @@ class CrashLogger {
     if (!context.mounted) return;
     switch (res) {
       case _CrashAction.share:
-        final dir = await getApplicationSupportDirectory();
-        await Share.shareXFiles(
-          [XFile('${dir.path}/$_name', mimeType: 'text/plain')],
-          text: 'Log de crash minhaloja',
-        );
+        await Share.shareXFiles(files, text: 'Logs de crash minhaloja');
         break;
       case _CrashAction.clear:
-        await clear();
         break;
       default:
         break;

@@ -11,6 +11,7 @@ import 'package:minhaloja/core/theme.dart';
 import 'package:minhaloja/models/models.dart';
 import 'package:minhaloja/network/api_client.dart';
 import 'package:minhaloja/network/api_service.dart';
+import 'package:minhaloja/utils/crash_logger.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:pdf_render/pdf_render.dart';
 
@@ -136,7 +137,10 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
     }
     return PageView.builder(
       itemCount: _pages.length,
-      onPageChanged: (i) => setState(() => _page = i),
+      onPageChanged: (i) {
+        CrashLogger.step('swipe preview pagina $i');
+        setState(() => _page = i);
+      },
       itemBuilder: (_, i) {
         // Decodifica no tamanho da TELA (não na resolução nativa 2898x2048):
         // texturas gigantes estouram a GPU/Impeller ao deslizar/zoom.
@@ -306,9 +310,11 @@ Future<List<Uint8List>> buildCompositePages({
         'shiftMulti': shiftYMulti,
         'format': jpegPreview ? 'jpeg' : 'png',
       });
+      await CrashLogger.step('composePage ok pagina $p');
       final path = res?['path'] as String?;
       if (path != null && path.isNotEmpty) {
         final f = File(path);
+        await CrashLogger.step('lendo arquivo pagina $p');
         out.add(await f.readAsBytes());
         await f.delete();
         continue;
