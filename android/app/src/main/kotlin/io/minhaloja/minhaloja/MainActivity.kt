@@ -15,6 +15,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -49,37 +50,32 @@ class MainActivity : FlutterActivity() {
                     "composePage" -> {
                         try {
                             @Suppress("UNCHECKED_CAST")
-                            val cellsRaw = call.argument<List<Any>>("cells")
-                            val cells = cellsRaw?.mapNotNull { it as? ByteArray } ?: emptyList()
+                            val pdfsRaw = call.argument<List<Any>>("pdfs")
+                            val pdfs = pdfsRaw?.mapNotNull { it as? ByteArray } ?: emptyList()
                             val cols = call.argument<Int>("cols") ?: 1
                             val rows = call.argument<Int>("rows") ?: 1
-                            val overlayName = call.argument<String>("overlay")
-                            val semOverlay = call.argument<Boolean>("semOverlay") ?: false
-                            val modoVenc = call.argument<Boolean>("vencimentos") ?: false
-                            val comums = call.argument<List<Int>>("comums") ?: emptyList()
-                            val topFracs = call.argument<List<Double>>("topFracs") ?: emptyList()
-                            val validades = call.argument<List<String>>("validades") ?: emptyList()
-                            val shiftVenc = (call.argument<Double>("shiftVenc") ?: 0.015).toFloat()
-                            val shiftMulti = (call.argument<Double>("shiftMulti") ?: 0.03).toFloat()
-                            if (cells.isEmpty() || cols <= 0 || rows <= 0) {
-                                result.error("BAD_ARGS", "cells/cols/rows invalid", null)
+                            val cellW = call.argument<Int>("cellW") ?: 0
+                            val cellH = call.argument<Int>("cellH") ?: 0
+                            if (pdfs.isEmpty() || cols <= 0 || rows <= 0 || cellW <= 0 || cellH <= 0) {
+                                result.error("BAD_ARGS", "pdfs/cols/rows/cellW/cellH invalid", null)
                                 return@setMethodCallHandler
                             }
-                            val page = composePage(
-                                cells, cols, rows, overlayName, semOverlay, modoVenc,
-                                comums, topFracs, validades, shiftVenc, shiftMulti
+                            // Throwable (inclui OOM) para não derrubar o app;
+                            // Dart faz fallback para o pipeline legado.
+                            val page = composePageFromPdfs(
+                                pdfs, cols, rows, cellW, cellH,
+                                call.argument<String>("overlay"),
+                                call.argument<Boolean>("semOverlay") ?: false,
+                                call.argument<Boolean>("vencimentos") ?: false,
+                                call.argument<List<Int>>("comums") ?: emptyList(),
+                                call.argument<List<Double>>("topFracs") ?: emptyList(),
+                                call.argument<List<String>>("validades") ?: emptyList(),
+                                (call.argument<Double>("shiftVenc") ?: 0.015).toFloat(),
+                                (call.argument<Double>("shiftMulti") ?: 0.03).toFloat()
                             )
-                            val stream = ByteArrayOutputStream()
-                            page.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                            val out = mapOf(
-                                "width" to page.width,
-                                "height" to page.height,
-                                "bytes" to stream.toByteArray()
-                            )
-                            page.recycle()
-                            result.success(out)
-                        } catch (e: Exception) {
-                            result.error("EXC", e.message, null)
+                            result.success(page)
+                        } catch (t: Throwable) {
+                            result.error("EXC", t.message, null)
                         }
                     }
                     else -> result.notImplemented()
@@ -94,23 +90,19 @@ class MainActivity : FlutterActivity() {
         null
     }
 
-    /** Lê apenas as dimensões de um PNG sem decodificar tudo. */
-    private fun pngSize(bytes: ByteArray): Pair<Int, Int> {
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-        return Pair(opts.outWidth, opts.outHeight)
-    }
-
     /**
-     * Compõe a página inteira nativamente (igual ao gerarPreviewMulti/
-     * gerarPreviewVencimentos do MLoja): fundo branco ou overlay escalado,
-     * células com removerBrancoSuave + centralizarConteudo e, no Vencimentos,
-     * os textos de validade/rodapé desenhados por cima, centrados na célula.
+     * Compõe a página inteira nativamente a partir dos PDFs da API (payload
+     * pequeno — sem pixels atravessando o canal): renderiza cada célula via
+     * PdfRenderer, aplica removerBrancoSuave + centralizarConteudo e, no
+     * Vencimentos, desenha validade/rodapé. Grava o PNG em cacheDir e devolve
+     * {"path": ...} — resposta minúscula pelo canal.
      */
-    private fun composePage(
-        cells: List<ByteArray>,
+    private fun composePageFromPdfs(
+        pdfs: List<ByteArray>,
         cols: Int,
         rows: Int,
+        cellW: Int,
+        cellH: Int,
         overlayName: String?,
         semOverlay: Boolean,
         modoVenc: Boolean,
@@ -119,10 +111,7 @@ class MainActivity : FlutterActivity() {
         validades: List<String>,
         shiftVenc: Float,
         shiftMulti: Float
-    ): Bitmap {
-        val (cw0, ch0) = pngSize(cells[0])
-        val cellW = if (cw0 > 0) cw0 else 800
-        val cellH = if (ch0 > 0) ch0 else 1000
+    ): Map<String, Any> {
         val ovW = cellW * cols
         val ovH = cellH * rows
 
@@ -141,10 +130,8 @@ class MainActivity : FlutterActivity() {
 
         val whitePaint = Paint().apply { color = Color.WHITE }
 
-        for (i in cells.indices) {
-            val data = cells[i]
-            if (data.isEmpty()) continue
-            val bmp = BitmapFactory.decodeByteArray(data, 0, data.size) ?: continue
+        for (i in pdfs.indices) {
+            val bmp = renderPdfToBitmap(pdfs[i], cellW, cellH) ?: continue
             removerBrancoSuave(bmp)
 
             val left = (i % cols) * cellW.toFloat()
@@ -167,7 +154,43 @@ class MainActivity : FlutterActivity() {
             bmp.recycle()
         }
         overlay?.recycle()
-        return page
+
+        val out = File(cacheDir, "page_${System.currentTimeMillis()}.png")
+        FileOutputStream(out).use { page.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val res =
+            mapOf<String, Any>("path" to out.absolutePath, "width" to page.width, "height" to page.height)
+        page.recycle()
+        return res
+    }
+
+    /** Renderiza a 1a página do PDF num bitmap na proporção nativa (~alvo). */
+    private fun renderPdfToBitmap(bytes: ByteArray, targetW: Int, targetH: Int): Bitmap? {
+        val file = File(cacheDir, "pdf_cell_${System.nanoTime()}.pdf")
+        file.outputStream().use { it.write(bytes) }
+        val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        val renderer = PdfRenderer(fd)
+        try {
+            if (renderer.pageCount < 1) return null
+            renderer.openPage(0).use { page ->
+                val pw = page.width.toDouble()
+                val ph = page.height.toDouble()
+                val s1 = ceil(targetW / pw)
+                val s2 = ceil(targetH / ph)
+                var scaleD = if (s1 < s2) s1 else s2
+                if (scaleD > 8.0) scaleD = 8.0
+                if (scaleD < 1.0) scaleD = 1.0
+                val sInt = scaleD.toInt()
+                val rw = (pw * sInt).toInt().coerceAtMost(7200)
+                val rh = (ph * rw / pw).toInt()
+                val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
+                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                return bmp
+            }
+        } finally {
+            renderer.close()
+            fd.close()
+            file.delete()
+        }
     }
 
     /** Igual ao centralizarConteudo do MLoja: estica na célula, só dx. */

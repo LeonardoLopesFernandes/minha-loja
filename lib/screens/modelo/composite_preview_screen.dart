@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -218,17 +219,17 @@ Future<List<Uint8List>> buildCompositePages({
         isLandscape ? 0.015 : (cols == 2 && rows == 2 ? 0.01 : 0.03);
     final shiftYMulti = isLandscape ? 0.015 : 0.03;
 
-    // ---- Caminho NATIVO (rápido, igual ao MLoja): os PNGs das células são
-    // compostos no Kotlin em um único Canvas — sem loops de pixel em Dart e
-    // com um único encode de PNG por página. Qualidade idêntica (mesmo
-    // render da API via PdfRenderer). Se falhar, cai no pipeline legado em
-    // Dart logo abaixo.
+    // ---- Caminho NATIVO (rápido, igual ao MLoja): envia os PDFs da API
+    // (payload pequeno) ao Kotlin, que renderiza cada célula via PdfRenderer,
+    // compõe a página num único Canvas e grava o PNG em cache. O canal só
+    // trafega o caminho do arquivo — sem pixels grandes em nenhuma direção.
+    // Se falhar, cai no pipeline legado em Dart logo abaixo.
     try {
       final idxN = <int>[];
       for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
         idxN.add(idx);
       }
-      final cellPng = List<Uint8List?>.filled(idxN.length, null);
+      final pdfBytes = List<Uint8List?>.filled(idxN.length, null);
       var nx = 0;
       Future<void> wk() async {
         while (true) {
@@ -236,7 +237,8 @@ Future<List<Uint8List>> buildCompositePages({
           if (i >= idxN.length) return;
           final idx = idxN[i];
           try {
-            cellPng[i] = await _renderPdfPng(api, items[idx], halfW, halfH);
+            pdfBytes[i] = await api
+                .previewPriceSign(items[idx].copyWith(size: Constants.signSize1x1));
           } catch (e) {
             LogHelper.e('Composite: erro item $idx', e);
           }
@@ -256,13 +258,15 @@ Future<List<Uint8List>> buildCompositePages({
         tops.add(
             comum ? (multiCellN ? 0.39 : 0.36) : (multiCellN ? 0.28 : 0.25));
         vds.add(validades.length > idx ? validades[idx] : '');
-        payload.add(cellPng[i] ?? Uint8List(0));
+        payload.add(pdfBytes[i] ?? Uint8List(0));
       }
       final res = await _pdfChannel.invokeMethod<Map<dynamic, dynamic>>(
           'composePage', {
-        'cells': payload,
+        'pdfs': payload,
         'cols': cols,
         'rows': rows,
+        'cellW': halfW,
+        'cellH': halfH,
         'overlay': 'assets/overlays/${s.toLowerCase()}.png',
         'semOverlay': semOverlay,
         'vencimentos': modoVencimentos,
@@ -272,9 +276,11 @@ Future<List<Uint8List>> buildCompositePages({
         'shiftVenc': shiftYVenc,
         'shiftMulti': shiftYMulti,
       });
-      final png = res?['bytes'] as Uint8List?;
-      if (png != null && png.isNotEmpty) {
-        out.add(png);
+      final path = res?['path'] as String?;
+      if (path != null && path.isNotEmpty) {
+        final f = File(path);
+        out.add(await f.readAsBytes());
+        await f.delete();
         continue;
       }
     } catch (e) {
