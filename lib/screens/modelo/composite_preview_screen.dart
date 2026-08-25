@@ -80,6 +80,7 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
         size: widget.size,
         modoVencimentos: widget.modoVencimentos,
         validades: widget.validades,
+        previewScale: 0.5,
       );
       if (!mounted) return;
       setState(() {
@@ -157,6 +158,7 @@ Future<List<Uint8List>> buildCompositePages({
   required bool modoVencimentos,
   required List<String> validades,
   bool semOverlay = false,
+  double previewScale = 1.0,
 }) async {
   final s = size.toUpperCase().replaceAll('×', 'X');
   int cols = 2;
@@ -191,12 +193,17 @@ Future<List<Uint8List>> buildCompositePages({
   final out = <Uint8List>[];
 
   for (int p = 0; p < pageCount; p++) {
-    final ovW = overlay?.width ?? (cols > rows ? 1200 : 850);
-    final ovH = overlay?.height ?? (cols > rows ? 850 : 1200);
+    final ovW0 = overlay?.width ?? (cols > rows ? 1200 : 850);
+    final ovH0 = overlay?.height ?? (cols > rows ? 850 : 1200);
+    // previewScale < 1 deixa o preview mais rápido (menor resolução) sem
+    // afetar a qualidade de impressão/compartilhamento (que usa 1.0).
+    final scale = previewScale > 0 && previewScale <= 1 ? previewScale : 1.0;
+    final ovW = (ovW0 * scale).round().clamp(1, 100000);
+    final ovH = (ovH0 * scale).round().clamp(1, 100000);
     final base = img.Image(width: ovW, height: ovH,
         numChannels: 4, format: img.Format.uint8);
     if (!semOverlay && overlay != null) {
-      img.compositeImage(base, overlay);
+      img.compositeImage(base, overlay, dstW: ovW, dstH: ovH);
     } else {
       img.fill(base, color: img.ColorRgb8(255, 255, 255));
     }
