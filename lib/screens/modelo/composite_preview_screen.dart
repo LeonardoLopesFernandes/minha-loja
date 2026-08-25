@@ -85,7 +85,7 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
         validades: widget.validades,
         previewScale: 1.0,
         jpegPreview: true,
-        displayMaxDim: 1536,
+        displayMaxDim: 1280,
       );
       if (!mounted) return;
       setState(() {

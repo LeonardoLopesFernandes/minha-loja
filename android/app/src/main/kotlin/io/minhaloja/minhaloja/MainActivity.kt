@@ -112,7 +112,7 @@ class MainActivity : FlutterActivity() {
                                     pdfs, cols, rows, cellW, cellH,
                                     overlayName, semOverlay, modoVenc,
                                     comums, topFracs, validades,
-                                    shiftVenc, shiftMulti, format
+                                    shiftVenc, shiftMulti, format, maxDim
                                 )
                                 runOnUiThread {
                                     try {
@@ -192,6 +192,8 @@ class MainActivity : FlutterActivity() {
         }
         if (overlay != null) {
             cv.drawBitmap(overlay, null, RectF(0f, 0f, ovW.toFloat(), ovH.toFloat()), null)
+            overlay.recycle()
+            overlay = null
         }
 
         val whitePaint = Paint().apply { color = Color.WHITE }

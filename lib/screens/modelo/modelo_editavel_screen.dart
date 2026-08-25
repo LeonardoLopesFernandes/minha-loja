@@ -184,7 +184,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         // Diagnóstico concluído: crash era na textura de exibição; preview
         // sai em ≤1536px (JPEG) e impressão/compartilhamento seguem full-res.
         jpegPreview: true,
-        displayMaxDim: 1536,
+        displayMaxDim: 1280,
       );
       _page = 0;
       if (mounted) setState(() => _loadingPreview = false);
