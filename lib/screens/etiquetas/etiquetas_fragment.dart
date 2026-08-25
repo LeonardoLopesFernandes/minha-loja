@@ -474,7 +474,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
               shape: BoxShape.circle,
             ),
             padding: const EdgeInsets.all(20),
-            child: Image.asset('assets/icons/ic_price_tag.png',
+            child: Image.asset('assets/icons/ic_etiqueta.png',
                 color: const Color(0xFFA0A0A0)),
           ),
           const SizedBox(height: 20),
