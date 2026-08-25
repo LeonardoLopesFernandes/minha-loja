@@ -29,55 +29,86 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "renderPdfToRgba" -> {
-                        try {
-                            val bytes = call.argument<ByteArray>("bytes")
-                            val w = call.argument<Int>("w") ?: 0
-                            val h = call.argument<Int>("h") ?: 0
-                            if (bytes == null || w <= 0 || h <= 0) {
-                                result.error("BAD_ARGS", "bytes/w/h invalid", null)
-                                return@setMethodCallHandler
-                            }
-                            val rgba = renderPdfToRgba(bytes, w, h)
-                            if (rgba == null) {
-                                result.error("RENDER_FAIL", "null bitmap", null)
-                            } else {
-                                result.success(rgba)
-                            }
-                        } catch (e: Exception) {
-                            result.error("EXC", e.message, null)
+                        val bytes = call.argument<ByteArray>("bytes")
+                        val w = call.argument<Int>("w") ?: 0
+                        val h = call.argument<Int>("h") ?: 0
+                        if (bytes == null || w <= 0 || h <= 0) {
+                            result.error("BAD_ARGS", "bytes/w/h invalid", null)
+                            return@setMethodCallHandler
                         }
+                        // Fora da main thread: evita ANR se o usuário tocar
+                        // durante o render.
+                        Thread {
+                            try {
+                                val rgba = renderPdfToRgba(bytes, w, h)
+                                runOnUiThread {
+                                    try {
+                                        if (rgba == null) {
+                                            result.error("RENDER_FAIL", "null bitmap", null)
+                                        } else {
+                                            result.success(rgba)
+                                        }
+                                    } catch (_: Throwable) {
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                runOnUiThread {
+                                    try {
+                                        result.error("EXC", t.message, null)
+                                    } catch (_: Throwable) {
+                                    }
+                                }
+                            }
+                        }.start()
                     }
                     "composePage" -> {
-                        try {
-                            @Suppress("UNCHECKED_CAST")
-                            val pdfsRaw = call.argument<List<Any>>("pdfs")
-                            val pdfs = pdfsRaw?.mapNotNull { it as? ByteArray } ?: emptyList()
-                            val cols = call.argument<Int>("cols") ?: 1
-                            val rows = call.argument<Int>("rows") ?: 1
-                            val cellW = call.argument<Int>("cellW") ?: 0
-                            val cellH = call.argument<Int>("cellH") ?: 0
-                            if (pdfs.isEmpty() || cols <= 0 || rows <= 0 || cellW <= 0 || cellH <= 0) {
-                                result.error("BAD_ARGS", "pdfs/cols/rows/cellW/cellH invalid", null)
-                                return@setMethodCallHandler
-                            }
-                            // Throwable (inclui OOM) para não derrubar o app;
-                            // Dart faz fallback para o pipeline legado.
-                            val page = composePageFromPdfs(
-                                pdfs, cols, rows, cellW, cellH,
-                                call.argument<String>("overlay"),
-                                call.argument<Boolean>("semOverlay") ?: false,
-                                call.argument<Boolean>("vencimentos") ?: false,
-                                call.argument<List<Int>>("comums") ?: emptyList(),
-                                call.argument<List<Double>>("topFracs") ?: emptyList(),
-                                call.argument<List<String>>("validades") ?: emptyList(),
-                                (call.argument<Double>("shiftVenc") ?: 0.015).toFloat(),
-                                (call.argument<Double>("shiftMulti") ?: 0.03).toFloat(),
-                                call.argument<String>("format") ?: "png"
-                            )
-                            result.success(page)
-                        } catch (t: Throwable) {
-                            result.error("EXC", t.message, null)
+                        @Suppress("UNCHECKED_CAST")
+                        val pdfsRaw = call.argument<List<Any>>("pdfs")
+                        val pdfs = pdfsRaw?.mapNotNull { it as? ByteArray } ?: emptyList()
+                        val cols = call.argument<Int>("cols") ?: 1
+                        val rows = call.argument<Int>("rows") ?: 1
+                        val cellW = call.argument<Int>("cellW") ?: 0
+                        val cellH = call.argument<Int>("cellH") ?: 0
+                        val overlayName = call.argument<String>("overlay")
+                        val semOverlay = call.argument<Boolean>("semOverlay") ?: false
+                        val modoVenc = call.argument<Boolean>("vencimentos") ?: false
+                        val comums = call.argument<List<Int>>("comums") ?: emptyList()
+                        val topFracs = call.argument<List<Double>>("topFracs") ?: emptyList()
+                        val validades = call.argument<List<String>>("validades") ?: emptyList()
+                        val shiftVenc = (call.argument<Double>("shiftVenc") ?: 0.015).toFloat()
+                        val shiftMulti = (call.argument<Double>("shiftMulti") ?: 0.03).toFloat()
+                        val format = call.argument<String>("format") ?: "png"
+                        if (pdfs.isEmpty() || cols <= 0 || rows <= 0 || cellW <= 0 || cellH <= 0) {
+                            result.error("BAD_ARGS", "pdfs/cols/rows/cellW/cellH invalid", null)
+                            return@setMethodCallHandler
                         }
+                        // Trabalho pesado FORA da main thread (como as
+                        // coroutines do MLoja): rodar aqui travava a UI por
+                        // vários segundos e qualquer toque gerava ANR/crash.
+                        // Captura Throwable (inclui OOM) — Dart faz fallback.
+                        Thread {
+                            try {
+                                val page = composePageFromPdfs(
+                                    pdfs, cols, rows, cellW, cellH,
+                                    overlayName, semOverlay, modoVenc,
+                                    comums, topFracs, validades,
+                                    shiftVenc, shiftMulti, format
+                                )
+                                runOnUiThread {
+                                    try {
+                                        result.success(page)
+                                    } catch (_: Throwable) {
+                                    }
+                                }
+                            } catch (t: Throwable) {
+                                runOnUiThread {
+                                    try {
+                                        result.error("EXC", t.message, null)
+                                    } catch (_: Throwable) {
+                                    }
+                                }
+                            }
+                        }.start()
                     }
                     else -> result.notImplemented()
                 }
