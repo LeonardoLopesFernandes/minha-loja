@@ -203,10 +203,13 @@ Future<List<Uint8List>> buildCompositePages({
     final halfW = (ovW / cols).floor();
     final halfH = (ovH / rows).floor();
 
-    // Deslocamento vertical único (unificado) para todos os tamanhos,
-    // evitando que o conteúdo fique em alturas diferentes conforme o
-    // tamanho selecionado no spinner (antes variava 0,015/0,01/0,03).
-    final shiftYVenc = 0.0;
+    final isLandscape = cols > rows;
+    // MLoja (ModeloEditavelActivity): deslocamento vertical por tamanho.
+    // Vencimentos: landscape 0,015 / 2x2 0,01 / outro 0,03.
+    // Multi: landscape 0,015 / outro 0,03.
+    final shiftYVenc =
+        isLandscape ? 0.015 : (cols == 2 && rows == 2 ? 0.01 : 0.03);
+    final shiftYMulti = isLandscape ? 0.015 : 0.03;
 
     // Rasteriza os cards da página em SEQUÊNCIA (com tolerância a falha por
     // item). O processamento paralelo causava crash do app com várias
@@ -266,20 +269,20 @@ Future<List<Uint8List>> buildCompositePages({
           _fillCell(base, left, top, halfW, halfH);
         }
         final ignorar = ehComum ? 0.03 : 0.0;
+        final maxShift = ehComum ? 1.0 : 0.35;
+        final shiftY = ehComum ? 0.0 : shiftYVenc;
         _centralizarConteudo(
-            base, raster, halfW, halfH, left, top, 0.35, ignorar, shiftYVenc);
+            base, raster, halfW, halfH, left, top, maxShift, ignorar, shiftY);
       } else {
         // Multi: overlay cobre a página toda; comum recebe fundo branco.
         if (ehComum && !semOverlay && overlay != null) {
           _fillCell(base, left, top, halfW, halfH);
         }
         final ignorar = ehComum ? 0.03 : 0.0;
-        // Deslocamento vertical único (unificado) para todos os tamanhos,
-        // igual ao Vencimentos, evitando alturas diferentes por tamanho.
-        // Zerado para alinhar ao comum e descer o conteúdo (antes subia 1,5%).
-        final shiftY = 0.0;
+        final maxShift = 1.0;
+        final shiftY = ehComum ? 0.0 : shiftYMulti;
         _centralizarConteudo(
-            base, raster, halfW, halfH, left, top, 0.35, ignorar, shiftY);
+            base, raster, halfW, halfH, left, top, maxShift, ignorar, shiftY);
       }
     }
     out.add(img.encodePng(base));
@@ -320,9 +323,12 @@ void _removerBrancoSuave(img.Image src) {
 }
 
 /// Equivalente ao desenharComProporcao/centralizarConteudo do Kotlin: aplica
-/// escala UNIFORME (preserva proporção, igual ao min(cellW/w, cellH/h) do
-/// Android) e centraliza o conteúdo não-branco dentro da célula. Evita a
-/// distorção que ocorria ao esticar o bitmap para cellW x cellH.
+/// Espelha fielmente o centralizarConteudo do MLoja (ModeloEditavelActivity.kt):
+/// o bitmap é ESTICADO para preencher a célula (cellW x cellH) e deslocado para
+/// cima por shiftYFrac. Apenas a horizontal é centralizada conforme a área não
+/// branca do conteúdo (dx, limitado por maxShiftFrac). Não há centralização
+/// vertical por conteúdo (dy) — diferentemente do desenharComProporcao, que era
+/// o que causava o conteúdo ficar em posição diversa da do MLoja.
 void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
     int left, int top, double maxShiftFrac, double ignorarBordasFrac, double shiftYFrac) {
   final w = bmp.width;
@@ -336,49 +342,31 @@ void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
   final bx1 = (sw * (1 - ignorarBordasFrac)).round();
   final by0 = (sh * ignorarBordasFrac).round();
   final by1 = (sh * (1 - ignorarBordasFrac)).round();
+  // Apenas a horizontal é medida (igual ao MLoja): não há dy vertical.
   int minX = sw;
   int maxX = -1;
-  int minY = sh;
-  int maxY = -1;
   for (int y = by0; y < by1; y += 2) {
     for (int x = bx0; x < bx1; x += 2) {
       final p = small.getPixel(x, y);
       if (p.a > 8 && (p.r < 250 || p.g < 250 || p.b < 250)) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
       }
     }
   }
 
-  // Escala uniforme (contain) — fiel ao desenharComProporcao do Kotlin.
-  final scale = (cellW / w < cellH / h) ? (cellW / w) : (cellH / h);
-  final dw = w * scale;
-  final dh = h * scale;
-  final dlBase = left + ((cellW - dw) / 2);
-  final dtBase = top - cellH * shiftYFrac + ((cellH - dh) / 2);
-
-  late int dstX;
-  late int dstY;
-  if (maxX <= minX || maxY <= minY) {
-    dstX = dlBase.round();
-    dstY = dtBase.round();
-  } else {
-    final scaleX = dw / sw;
-    final scaleY = dh / sh;
-    final contentW = (maxX - minX + 1) * scaleX;
-    final contentH = (maxY - minY + 1) * scaleY;
-    final dx = (((dw - contentW) / 2) - minX * scaleX)
-        .clamp(-dw * maxShiftFrac, dw * maxShiftFrac);
-    final dy = (((dh - contentH) / 2) - minY * scaleY)
-        .clamp(-dh * maxShiftFrac, dh * maxShiftFrac);
-    dstX = (dlBase + dx).round();
-    dstY = (dtBase + dy).round();
+  final dstY = (top - cellH * shiftYFrac).round();
+  if (maxX <= minX) {
+    img.compositeImage(base, bmp,
+        dstX: left, dstY: dstY, dstW: cellW, dstH: cellH);
+    return;
   }
-
+  final scaleX = cellW / sw;
+  final contentDrawW = (maxX - minX + 1) * scaleX;
+  final dx = (((cellW - contentDrawW) / 2) - minX * scaleX)
+      .clamp(-cellW * maxShiftFrac, cellW * maxShiftFrac);
   img.compositeImage(base, bmp,
-      dstX: dstX, dstY: dstY, dstW: dw.round(), dstH: dh.round());
+      dstX: (left + dx).round(), dstY: dstY, dstW: cellW, dstH: cellH);
 }
 
 Future<img.Image?> _rasterizeCard(
