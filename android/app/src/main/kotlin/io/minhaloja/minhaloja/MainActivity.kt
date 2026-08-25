@@ -6,6 +6,7 @@ import android.os.ParcelFileDescriptor
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 class MainActivity : FlutterActivity() {
@@ -64,19 +65,15 @@ class MainActivity : FlutterActivity() {
                 val rh = (ph * rw / pw).toInt()
                 val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
-                val pixels = IntArray(rw * rh)
-                bmp.getPixels(pixels, 0, rw, 0, 0, rw, rh)
+                // Comprime para PNG antes de devolver: o byte-array RGBA cru
+                // seria multi-MB e estouraria o limite de transação do
+                // MethodChannel (causando falha silenciosa + fallback
+                // pdf_render, que duplica texto). PNG compacta bem e cabe.
+                val stream = ByteArrayOutputStream()
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, stream)
                 bmp.recycle()
-                val out = ByteArray(rw * rh * 4)
-                for (i in pixels.indices) {
-                    val p = pixels[i]
-                    val o = i * 4
-                    out[o] = ((p shr 16) and 0xFF).toByte()
-                    out[o + 1] = ((p shr 8) and 0xFF).toByte()
-                    out[o + 2] = (p and 0xFF).toByte()
-                    out[o + 3] = ((p shr 24) and 0xFF).toByte()
-                }
-                return mapOf("width" to rw, "height" to rh, "bytes" to out)
+                val png = stream.toByteArray()
+                return mapOf("width" to rw, "height" to rh, "bytes" to png)
             }
         } finally {
             renderer.close()

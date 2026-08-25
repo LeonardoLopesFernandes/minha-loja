@@ -410,25 +410,34 @@ Future<img.Image?> _rasterizeCard(
 const _pdfChannel = MethodChannel('minhaloja/pdf');
 
 /// Renderiza o PDF da API usando o PdfRenderer do Android (igual ao MLoja),
-/// retornando o bitmap em RGBA. Retorna null se o canal não estiver disponível
-/// (ex.: fora do Android) para usar o fallback pdf_render.
+/// retornando o bitmap em PNG (compacto). Retorna null se o canal não
+/// estiver disponível (ex.: fora do Android) para usar o fallback pdf_render.
+/// Em caso de erro, registra o motivo (não silencia) para facilitar o diagnóstico.
 Future<img.Image?> _renderViaPlatform(Uint8List bytes, int w, int h) async {
   try {
     final res = await _pdfChannel.invokeMethod<Map<dynamic, dynamic>>(
       'renderPdfToRgba',
       {'bytes': bytes, 'w': w, 'h': h},
     );
-    if (res == null) return null;
-    final rw = res['width'] as int;
-    final rh = res['height'] as int;
-    final data = res['bytes'] as Uint8List;
-    if (rw <= 0 || rh <= 0 || data.lengthInBytes < rw * rh * 4) return null;
-    return img.Image.fromBytes(
-        width: rw,
-        height: rh,
-        bytes: data.buffer,
-        format: img.Format.uint8);
-  } catch (_) {
+    if (res == null) {
+      LogHelper.e('Composite: canal minhaloja/pdf retornou null');
+      return null;
+    }
+    final rw = res['width'] as int? ?? 0;
+    final rh = res['height'] as int? ?? 0;
+    final data = res['bytes'] as Uint8List?;
+    if (rw <= 0 || rh <= 0 || data == null || data.isEmpty) {
+      LogHelper.e('Composite: dados da plataforma invalidos (rw=$rw rh=$rh)');
+      return null;
+    }
+    final decoded = img.decodeImage(data);
+    if (decoded == null) {
+      LogHelper.e('Composite: falha ao decodificar PNG da plataforma');
+      return null;
+    }
+    return decoded;
+  } catch (e, st) {
+    LogHelper.e('Composite: render via plataforma falhou', '$e\n$st');
     return null;
   }
 }
