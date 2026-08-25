@@ -9,6 +9,7 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
+import 'package:minhaloja/utils/buscar_anim.dart';
 import 'package:minhaloja/widgets/cards.dart';
 
 class PapeletasFragment extends StatefulWidget {
@@ -18,7 +19,8 @@ class PapeletasFragment extends StatefulWidget {
   State<PapeletasFragment> createState() => _PapeletasFragmentState();
 }
 
-class _PapeletasFragmentState extends State<PapeletasFragment> {
+class _PapeletasFragmentState extends State<PapeletasFragment>
+    with BuscarAnimMixin {
   final ApiService _api = ApiService(ApiClient.instance.getSlApiService());
   final SessionManager _session = SessionManager.instance!;
 
@@ -173,6 +175,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
       _loading = true;
       _eanHint = 'BUSCANDO...';
     });
+    startBuscarAnim();
     try {
       final results = await Future.wait([
         _api.getPriceSignStandalone(_store, Constants.tipoComum,
@@ -218,6 +221,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
           _eanHint = _baseHint;
         });
       }
+      stopBuscarAnim();
     }
   }
 
@@ -549,7 +553,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                   margin: const EdgeInsets.only(right: 4),
                   height: 40,
                   child: ElevatedButton(
-                    onPressed: _addStandalone,
+                    onPressed: buscando ? null : _addStandalone,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFD32F2F),
                       foregroundColor: Colors.white,
@@ -558,7 +562,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
                       textStyle: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.bold),
                     ),
-                    child: const Text('BUSCAR'),
+                    child: buscando ? Text(buscandoLabel) : const Text('BUSCAR'),
                   ),
                 ),
               ],
@@ -626,12 +630,10 @@ class _PapeletasFragmentState extends State<PapeletasFragment> {
           children: [
             _buildFilterBar(),
             Expanded(
-              child: _loading && _items.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : _items.isEmpty
-                      ? const Center(
-                          child: Text('Nenhuma papeleta encontrada'))
-                      : ListView.builder(
+              child: _items.isEmpty
+                  ? const Center(
+                      child: Text('Nenhuma papeleta encontrada'))
+                  : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                           itemCount: _items.length,
                           itemBuilder: (context, index) {

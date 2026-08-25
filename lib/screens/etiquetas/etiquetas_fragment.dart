@@ -9,6 +9,7 @@ import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
+import 'package:minhaloja/utils/buscar_anim.dart';
 import 'package:minhaloja/widgets/cards.dart';
 
   String _formatToday() {
@@ -63,7 +64,8 @@ class EtiquetasFragment extends StatefulWidget {
   State<EtiquetasFragment> createState() => _EtiquetasFragmentState();
 }
 
-class _EtiquetasFragmentState extends State<EtiquetasFragment> {
+class _EtiquetasFragmentState extends State<EtiquetasFragment>
+    with BuscarAnimMixin {
   final ApiService api = ApiService(ApiClient.instance.getSlApiService());
 
   late final String _storeId;
@@ -142,6 +144,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
       _loading = true;
       _eanHint = 'BUSCANDO...';
     });
+    startBuscarAnim();
     try {
       final resp = await api.getSingleLabelByEan(
         _storeId,
@@ -190,6 +193,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
           _eanHint = _baseHint;
         });
       }
+      stopBuscarAnim();
     }
   }
 
@@ -387,7 +391,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
                   margin: const EdgeInsets.only(right: 4),
                   height: 40,
                   child: ElevatedButton(
-                    onPressed: () => _fetchAndAdd(_eanController.text),
+                    onPressed: buscando ? null : () => _fetchAndAdd(_eanController.text),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFD32F2F),
                       foregroundColor: Colors.white,
@@ -396,7 +400,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
                       textStyle: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.bold),
                     ),
-                    child: const Text('BUSCAR'),
+                    child: buscando ? Text(buscandoLabel) : const Text('BUSCAR'),
                   ),
                 ),
               ],
@@ -491,10 +495,8 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment> {
           children: [
             _buildFilterBar(),
             Expanded(
-              child: _loading && _tags.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : _tags.isEmpty
-                      ? _emptyState()
+              child: _tags.isEmpty
+                  ? _emptyState()
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                           itemCount: _tags.length,

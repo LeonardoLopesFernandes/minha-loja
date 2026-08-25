@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../utils/toast_utils.dart';
 import '../../utils/log_helper.dart';
 import '../../utils/session_expired_handler.dart';
+import '../../utils/buscar_anim.dart';
 
 class PapeletasDiariasScreen extends StatefulWidget {
   const PapeletasDiariasScreen({super.key});
@@ -17,7 +18,8 @@ class PapeletasDiariasScreen extends StatefulWidget {
   State<PapeletasDiariasScreen> createState() => _PapeletasDiariasScreenState();
 }
 
-class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
+class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
+    with BuscarAnimMixin {
   final ApiService _api = ApiService(ApiClient.instance.getSlApiService());
   final ScrollController _scrollController = ScrollController();
 
@@ -126,6 +128,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
 
   Future<void> _loadSigns() async {
     setState(() => _isLoading = true);
+    startBuscarAnim();
     try {
       final comum = await _api.getPriceSigns(_storeId, Constants.signTypePapeletaComum,
           status: _selectedStatus, startDate: _currentDate);
@@ -165,6 +168,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
       LogHelper.e('PapeletasDiarias: erro ao carregar', e);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+      stopBuscarAnim();
     }
   }
 
@@ -313,9 +317,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
           children: [
             _buildHeader(isTomorrow, nextDay),
             Expanded(
-              child: _isLoading && _items.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildBody(),
+              child: _buildBody(),
             ),
             _buildBottomBar(),
           ],
@@ -617,12 +619,12 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen> {
               ),
               const SizedBox(width: 10),
               ElevatedButton(
-                onPressed: _loadSigns,
+                onPressed: buscando ? null : _loadSigns,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                 ),
-                child: const Text('BUSCAR'),
+                child: buscando ? Text(buscandoLabel) : const Text('BUSCAR'),
               ),
             ],
           ),

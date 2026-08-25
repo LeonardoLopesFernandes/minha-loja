@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../utils/toast_utils.dart';
 import '../../utils/log_helper.dart';
 import '../../utils/session_expired_handler.dart';
+import '../../utils/buscar_anim.dart';
 
 class EtiquetasScreen extends StatefulWidget {
   const EtiquetasScreen({super.key});
@@ -17,7 +18,8 @@ class EtiquetasScreen extends StatefulWidget {
   State<EtiquetasScreen> createState() => _EtiquetasScreenState();
 }
 
-class _EtiquetasScreenState extends State<EtiquetasScreen> {
+class _EtiquetasScreenState extends State<EtiquetasScreen>
+    with BuscarAnimMixin {
   final ApiService _api = ApiService(ApiClient.instance.getSlApiService());
   final ScrollController _scrollController = ScrollController();
 
@@ -109,6 +111,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
 
   Future<void> _loadTags() async {
     setState(() => _isLoading = true);
+    startBuscarAnim();
     try {
       final resp = await _api.getPriceTagsByStatus(_storeId, _selectedStatus,
           startDate: _currentDate);
@@ -135,6 +138,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
       LogHelper.e('EtiquetasScreen: erro ao buscar', e);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+      stopBuscarAnim();
     }
   }
 
@@ -317,9 +321,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
           children: [
             _buildHeader(isTomorrow, nextDay),
             Expanded(
-              child: _isLoading && _items.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildBody(),
+              child: _buildBody(),
             ),
             _buildBottomBar(),
           ],
@@ -588,12 +590,12 @@ class _EtiquetasScreenState extends State<EtiquetasScreen> {
               ),
               const SizedBox(width: 10),
               ElevatedButton(
-                onPressed: _loadTags,
+                onPressed: buscando ? null : _loadTags,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                 ),
-                child: const Text('BUSCAR'),
+                child: buscando ? Text(buscandoLabel) : const Text('BUSCAR'),
               ),
             ],
           ),
