@@ -249,11 +249,17 @@ Future<List<Uint8List>> buildCompositePages({
         _centralizarConteudo(base, raster, halfW, halfH, left, top, maxShift,
             ignorar, shiftY);
         // Validade/rodapé por cima, centrados na célula.
+        // Em tamanhos multi-célula (2x1/4x1/6x1) o conteúdo assenta mais
+        // baixo, então o texto desce um pouco também; 1x1 fica como validado.
+        final multiCell = cols * rows > 1;
         final vTxt = validades.length > idx ? validades[idx] : '';
         if (vTxt.trim().isNotEmpty) {
           try {
-            final layer =
-                await _camadaTextosVencimento(halfW, halfH, vTxt.trim());
+            final layer = await _camadaTextosVencimento(
+                halfW, halfH, vTxt.trim(),
+                topFrac: ehComum
+                    ? (multiCell ? 0.42 : 0.36)
+                    : (multiCell ? 0.38 : 0.25));
             img.compositeImage(base, layer,
                 dstX: left, dstY: top, dstW: halfW, dstH: halfH);
           } catch (e) {
@@ -379,7 +385,8 @@ void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
 /// Camada transparente (tamanho da célula) com "VAL.: <data>" e o rodapé
 /// fixo, ambos centralizados na PRÓPRIA célula. É composta POR CIMA da página
 /// já montada, então não interfere no posicionamento do conteúdo da API.
-Future<img.Image> _camadaTextosVencimento(int w, int h, String validade) async {
+Future<img.Image> _camadaTextosVencimento(int w, int h, String validade,
+    {double topFrac = 0.25}) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(
       recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));
@@ -402,7 +409,10 @@ Future<img.Image> _camadaTextosVencimento(int w, int h, String validade) async {
     tp.paint(canvas, Offset((w - tp.width) / 2, y - tp.height / 2));
   }
 
-  draw('VAL.: ${txt.toUpperCase()}', h * 0.25, w / 18);
+  // Promocional: topFrac padrão (0.25, posição validada pelo usuário).
+  // Comum: o conteúdo da API é mais baixo no card, então o texto desce
+  // (0.36), dentro da faixa que o MLoja usa (0.28–0.45).
+  draw('VAL.: ${txt.toUpperCase()}', h * topFrac, w / 18);
   draw('PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO', h * 0.88,
       (w / 32).clamp(8, 26).toDouble());
   final picture = recorder.endRecording();
