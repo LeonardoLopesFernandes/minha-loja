@@ -485,18 +485,16 @@ Future<img.Image> _drawVencimento(
       : validade.trim();
   // Posicionamento da validade: mesma lógica do MLoja (localizar primeira banda + 
   // deslocamento + coerção para faixa h*0.28 até h*0.45).
-  // Aqui usamos o centro da célula (w/2) e deslocamento 0.34h, que está dentro 
-  // da faixa do MLoja.
-  // O tamanho da fonte segue o MLoja: 16 * (w / 320) = w / 20.
-  final yVal = h * 0.34;
-  // Rodapé: posição fixa em todos os tamanhos, igual ao MLoja.
-  // A fórmula do MLoja considera as métricas da fonte, mas a posição h*0.93 com 
-  // ajuste aproximado fica próxima do original.
-  final yFooter = h * 0.93;
+  // Aqui usamos o centro da célula (w/2) e deslocamento 0.28h — mais acima,
+  // dentro da faixa do MLoja (h*0.28 a h*0.45).
+  // Fonte maior: w / 18 (antes w / 20).
+  final yVal = h * 0.28;
+  // Rodapé: um pouco mais pra cima (0.88h) e fonte maior (w / 32).
+  final yFooter = h * 0.88;
   _drawCentered(canvas, w, yVal, 'VAL.: $validaTexto'.toUpperCase(),
-      fontSize: w / 20, bold: true);
+      fontSize: w / 18, bold: true);
   _drawCentered(canvas, w, yFooter, 'PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO',
-      fontSize: (w / 35.5).clamp(8, 26).toDouble(), bold: true);
+      fontSize: (w / 32).clamp(8, 26).toDouble(), bold: true);
   final picture = recorder.endRecording();
   final out = await picture.toImage(w, h);
   final pngOut = (await out.toByteData(format: ui.ImageByteFormat.png))!
