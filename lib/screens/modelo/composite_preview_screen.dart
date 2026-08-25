@@ -242,7 +242,7 @@ Future<List<Uint8List>> buildCompositePages({
             _fillCell(base, left, top, halfW, halfH);
           }
           _centralizarConteudo(
-              base, raster, halfW, halfH, left, top, 1.0, 0.03, 0.0);
+              base, raster, halfW, halfH, left, top, 0.35, 0.03, 0.0);
         }
       } else {
         // Multi: overlay cobre a página toda; comum recebe fundo branco.
@@ -252,7 +252,7 @@ Future<List<Uint8List>> buildCompositePages({
         final ignorar = ehComum ? 0.03 : 0.0;
         final shiftY = ehComum ? 0.0 : (cols > rows ? 0.015 : 0.03);
         _centralizarConteudo(
-            base, raster, halfW, halfH, left, top, 1.0, ignorar, shiftY);
+            base, raster, halfW, halfH, left, top, 0.35, ignorar, shiftY);
       }
     }
     out.add(img.encodePng(base));
