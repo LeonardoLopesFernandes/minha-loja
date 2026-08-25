@@ -279,6 +279,9 @@ Future<List<Uint8List>> buildCompositePages({
         _centralizarConteudo(
             base, raster, halfW, halfH, left, top, maxShift, ignorar, shiftY);
       }
+      // Libera o raster da célula imediatamente após compor (contém a memória
+      // em páginas com muitas etiquetas).
+      rasters[k] = null;
     }
     out.add(img.encodePng(base));
   }
@@ -390,7 +393,7 @@ Future<img.Image> _camadaTextosVencimento(int w, int h, String validade) async {
     tp.paint(canvas, Offset((w - tp.width) / 2, y - tp.height / 2));
   }
 
-  draw('VAL.: ${txt.toUpperCase()}', h * 0.24, w / 18);
+  draw('VAL.: ${txt.toUpperCase()}', h * 0.25, w / 18);
   draw('PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO', h * 0.88,
       (w / 32).clamp(8, 26).toDouble());
   final picture = recorder.endRecording();
@@ -398,6 +401,7 @@ Future<img.Image> _camadaTextosVencimento(int w, int h, String validade) async {
   final png = (await out.toByteData(format: ui.ImageByteFormat.png))!
       .buffer
       .asUint8List();
+  out.dispose();
   return img.decodeImage(png)!;
 }
 
@@ -427,7 +431,7 @@ Future<List<img.Image?>> _rasterizarPagina(
     }
   }
 
-  final nWorkers = pageIdx.length < 3 ? pageIdx.length : 3;
+  final nWorkers = pageIdx.length < 2 ? pageIdx.length : 2;
   await Future.wait(List.generate(nWorkers, (_) => worker()));
 
   return results;

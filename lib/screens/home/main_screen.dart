@@ -183,7 +183,8 @@ class _MainScreenState extends State<MainScreen> {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            Image.asset(icon, width: 24, height: 24, color: Colors.white),
+            Image.asset(icon,
+                width: 24, height: 24, fit: BoxFit.contain, color: Colors.white),
             const SizedBox(width: 12),
             Text(label,
                 style: const TextStyle(
