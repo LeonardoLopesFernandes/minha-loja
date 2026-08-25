@@ -333,16 +333,16 @@ class _LoginScreenState extends State<LoginScreen>
                   children: [
                     Checkbox(
                       value: _salvarCredenciais,
-                      activeColor: Colors.white,
-                      checkColor: AppColors.primary,
-                      side: const BorderSide(color: Colors.white),
+                      activeColor: AppColors.primary,
+                      checkColor: Colors.white,
+                      side: const BorderSide(color: Colors.grey),
                       onChanged: (v) =>
                           setState(() => _salvarCredenciais = v ?? false),
                     ),
                     const Text(
                       'Salvar credenciais e ativar login automático',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Colors.black87,
                         fontSize: 13,
                       ),
                     ),
