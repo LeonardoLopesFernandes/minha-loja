@@ -206,7 +206,7 @@ Future<List<Uint8List>> buildCompositePages({
     // Deslocamento vertical único (unificado) para todos os tamanhos,
     // evitando que o conteúdo fique em alturas diferentes conforme o
     // tamanho selecionado no spinner (antes variava 0,015/0,01/0,03).
-    final shiftYVenc = 0.015;
+    final shiftYVenc = 0.0;
 
     // Rasteriza os cards da página em SEQUÊNCIA (com tolerância a falha por
     // item). O processamento paralelo causava crash do app com várias
@@ -276,7 +276,8 @@ Future<List<Uint8List>> buildCompositePages({
         final ignorar = ehComum ? 0.03 : 0.0;
         // Deslocamento vertical único (unificado) para todos os tamanhos,
         // igual ao Vencimentos, evitando alturas diferentes por tamanho.
-        final shiftY = ehComum ? 0.0 : 0.015;
+        // Zerado para alinhar ao comum e descer o conteúdo (antes subia 1,5%).
+        final shiftY = 0.0;
         _centralizarConteudo(
             base, raster, halfW, halfH, left, top, 0.35, ignorar, shiftY);
       }
