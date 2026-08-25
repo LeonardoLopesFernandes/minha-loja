@@ -513,22 +513,41 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
       children: [
         PageView.builder(
           itemCount: _pages.length,
-          onPageChanged: (i) => setState(() => _page = i),
-          itemBuilder: (_, i) => InteractiveViewer(
-            child: Image.memory(
-              _pages[i],
-              fit: BoxFit.contain,
-              cacheWidth: (MediaQuery.of(context).size.width *
-                      MediaQuery.of(context).devicePixelRatio)
-                  .round()
-                  .clamp(720, 2160),
-              gaplessPlayback: true,
-              errorBuilder: (_, e, __) {
-                CrashLogger.write('ImageDecodeModelo', 'pagina $i: $e');
-                return const Icon(Icons.broken_image, size: 64);
-              },
-            ),
-          ),
+          onPageChanged: (i) {
+            CrashLogger.step('modelo: swipe pagina $i');
+            setState(() => _page = i);
+          },
+          itemBuilder: (_, i) {
+            // TESTE BINÁRIO: oculta a imagem para provar se o crash está na
+            // exibição ou alhures. _kPreviewMostraImagem = false -> placeholder.
+            const _kPreviewMostraImagem = false;
+            CrashLogger.step('modelo: montando pagina $i (img=$_kPreviewMostraImagem)');
+            final img = _kPreviewMostraImagem
+                ? Image.memory(
+                    _pages[i],
+                    fit: BoxFit.contain,
+                    cacheWidth: (MediaQuery.of(context).size.width *
+                            MediaQuery.of(context).devicePixelRatio)
+                        .round()
+                        .clamp(720, 2160),
+                    gaplessPlayback: true,
+                    errorBuilder: (_, e, __) {
+                      CrashLogger.write('ImageDecodeModelo', 'pagina $i: $e');
+                      return const Icon(Icons.broken_image, size: 64);
+                    },
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.image_not_supported, size: 64),
+                      const SizedBox(height: 8),
+                      Text('Preview oculto (teste) — página ${i + 1}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 13, color: Colors.black54)),
+                    ],
+                  );
+            return InteractiveViewer(maxScale: 4, child: img);
+          },
         ),
         Positioned(
           top: 8,
