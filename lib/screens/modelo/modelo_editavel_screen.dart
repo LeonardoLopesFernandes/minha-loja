@@ -181,9 +181,10 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         validades: _validades(),
         semOverlay: _semOverlay,
         previewScale: 1.0,
-        // Diagnóstico: PNG no lugar do JPEG — se o crash sumir, o culpado é
-        // o decodificador de JPEG ao subir a textura.
-        jpegPreview: false,
+        // Diagnóstico concluído: crash era na textura de exibição; preview
+        // sai em ≤1536px (JPEG) e impressão/compartilhamento seguem full-res.
+        jpegPreview: true,
+        displayMaxDim: 1536,
       );
       _page = 0;
       if (mounted) setState(() => _loadingPreview = false);

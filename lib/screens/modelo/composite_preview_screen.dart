@@ -84,7 +84,8 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
         modoVencimentos: widget.modoVencimentos,
         validades: widget.validades,
         previewScale: 1.0,
-        jpegPreview: false,
+        jpegPreview: true,
+        displayMaxDim: 1536,
       );
       if (!mounted) return;
       setState(() {
@@ -186,6 +187,7 @@ Future<List<Uint8List>> buildCompositePages({
   bool semOverlay = false,
   double previewScale = 1.0,
   bool jpegPreview = false,
+  int displayMaxDim = 0,
 }) async {
   final s = size.toUpperCase().replaceAll('×', 'X');
   int cols = 2;
@@ -315,6 +317,7 @@ Future<List<Uint8List>> buildCompositePages({
         'shiftVenc': shiftYVenc,
         'shiftMulti': shiftYMulti,
         'format': jpegPreview ? 'jpeg' : 'png',
+        'maxDim': displayMaxDim,
       });
       await CrashLogger.step('composePage ok pagina $p');
       final path = res?['path'] as String?;

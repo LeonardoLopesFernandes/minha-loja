@@ -97,6 +97,7 @@ class MainActivity : FlutterActivity() {
                         val shiftVenc = (call.argument<Double>("shiftVenc") ?: 0.015).toFloat()
                         val shiftMulti = (call.argument<Double>("shiftMulti") ?: 0.03).toFloat()
                         val format = call.argument<String>("format") ?: "png"
+                        val maxDim = call.argument<Int>("maxDim") ?: 0
                         if (pdfs.isEmpty() || cols <= 0 || rows <= 0 || cellW <= 0 || cellH <= 0) {
                             result.error("BAD_ARGS", "pdfs/cols/rows/cellW/cellH invalid", null)
                             return@setMethodCallHandler
@@ -172,7 +173,8 @@ class MainActivity : FlutterActivity() {
         validades: List<String>,
         shiftVenc: Float,
         shiftMulti: Float,
-        format: String
+        format: String,
+        maxDim: Int
     ): Map<String, Any> {
         val ovW = cellW * cols
         val ovH = cellH * rows
@@ -221,19 +223,34 @@ class MainActivity : FlutterActivity() {
         }
         overlay?.recycle()
 
+        // Preview: reduz a página para tamanho de exibição ANTES de codificar —
+        // texturas pequenas não estouram a GPU ao deslizar/zoom.
+        var outBmp = page
+        if (maxDim > 0 && (ovW > maxDim || ovH > maxDim)) {
+            val s = min(maxDim.toFloat() / ovW, maxDim.toFloat() / ovH)
+            val nw = (ovW * s).toInt().coerceAtLeast(1)
+            val nh = (ovH * s).toInt().coerceAtLeast(1)
+            val scaled = Bitmap.createScaledBitmap(page, nw, nh, true)
+            if (scaled !== page) {
+                page.recycle()
+                outBmp = scaled
+            }
+            bstep("downscale $ovW x $ovH -> $nw x $nh")
+        }
+
         // JPEG (preview) codifica ~3x mais rápido que PNG; a página composta
         // é opaca, então não há perda de transparência. Impressão/PDF usa PNG.
         val isJpeg = format.equals("jpeg", ignoreCase = true)
         val out = File(cacheDir, "page_${System.nanoTime()}.${if (isJpeg) "jpg" else "png"}")
         bstep("encode inicio")
         FileOutputStream(out).use {
-            if (isJpeg) page.compress(Bitmap.CompressFormat.JPEG, 92, it)
-            else page.compress(Bitmap.CompressFormat.PNG, 100, it)
+            if (isJpeg) outBmp.compress(Bitmap.CompressFormat.JPEG, 92, it)
+            else outBmp.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         bstep("encode ok")
         val res =
-            mapOf<String, Any>("path" to out.absolutePath, "width" to page.width, "height" to page.height)
-        page.recycle()
+            mapOf<String, Any>("path" to out.absolutePath, "width" to outBmp.width, "height" to outBmp.height)
+        outBmp.recycle()
         return res
     }
 
