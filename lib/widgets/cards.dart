@@ -552,8 +552,8 @@ class _PriceTagCardState extends State<PriceTagCard> {
                           color: _descDark)),
                 ),
                 SizedBox(
-                  width: 26,
-                  height: 26,
+                  width: 30,
+                  height: 30,
                   child: Container(
                     decoration: BoxDecoration(
                       color: _qtyGray,
@@ -562,9 +562,10 @@ class _PriceTagCardState extends State<PriceTagCard> {
                     child: TextField(
                       controller: _qty,
                       textAlign: TextAlign.center,
+                      textAlignVertical: TextAlignVertical.center,
                       keyboardType: TextInputType.number,
                       style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold, color: _descDark),
+                          fontSize: 15, fontWeight: FontWeight.bold, color: _descDark),
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         isCollapsed: true,
@@ -735,8 +736,8 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
                           color: _descDark)),
                 ),
                 SizedBox(
-                  width: 26,
-                  height: 26,
+                  width: 30,
+                  height: 30,
                   child: Container(
                     decoration: BoxDecoration(
                       color: _qtyGray,
@@ -745,9 +746,10 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
                     child: TextField(
                       controller: _qty,
                       textAlign: TextAlign.center,
+                      textAlignVertical: TextAlignVertical.center,
                       keyboardType: TextInputType.number,
                       style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold, color: _descDark),
+                          fontSize: 15, fontWeight: FontWeight.bold, color: _descDark),
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         isCollapsed: true,
