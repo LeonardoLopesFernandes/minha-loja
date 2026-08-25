@@ -208,14 +208,18 @@ Future<List<Uint8List>> buildCompositePages({
     // tamanho selecionado no spinner (antes variava 0,015/0,01/0,03).
     final shiftYVenc = 0.015;
 
-    // Rasteriza os cards da página em PARALELO (rede + render nativo) para
-    // acelerar a geração da pré-visualização (antes era sequencial, item a
-    // item). A composição abaixo continua idêntica e em resolução nativa.
+    // Rasteriza os cards da página em SEQUÊNCIA (com tolerância a falha por
+    // item). O processamento paralelo causava crash do app com várias
+    // etiquetas: alocação simultânea de bitmaps grandes (estouro de memória),
+    // chamadas concorrentes ao canal nativo minhaloja/pdf e chamadas
+    // concorrentes a picture.toImage() (modo Vencimentos). Cada item que
+    // falhar é ignorado (null) em vez de derrubar toda a página.
     final pageIdx = <int>[];
     for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
       pageIdx.add(idx);
     }
-    final rasters = await Future.wait(pageIdx.map((idx) async {
+    final rasters = <img.Image?>[];
+    for (final idx in pageIdx) {
       final item = items[idx];
       final validade = validades.length > idx ? validades[idx] : null;
       img.Image? r;
@@ -223,14 +227,21 @@ Future<List<Uint8List>> buildCompositePages({
         r = await _rasterizeCard(api, item, halfW, halfH);
       } catch (e) {
         LogHelper.e('Composite: erro item $idx', e);
-        return null;
+        r = null;
       }
-      if (r == null) return null;
+      if (r == null) {
+        rasters.add(null);
+        continue;
+      }
       if (modoVencimentos && validade != null && validade.trim().isNotEmpty) {
-        r = await _drawVencimento(r, validade.trim(), halfW, halfH);
+        try {
+          r = await _drawVencimento(r, validade.trim(), halfW, halfH);
+        } catch (e) {
+          LogHelper.e('Composite: erro validade item $idx', e);
+        }
       }
-      return r;
-    }));
+      rasters.add(r);
+    }
 
     for (int k = 0; k < pageIdx.length; k++) {
       final idx = pageIdx[k];
@@ -245,19 +256,18 @@ Future<List<Uint8List>> buildCompositePages({
       final ehComum = _ehComum(item);
 
       if (modoVencimentos) {
-        // Vencimentos: overlay é desenhado por célula (apenas não-comum).
-        if (!semOverlay && overlay != null && !ehComum) {
-          img.compositeImage(base, overlay,
-              dstX: left, dstY: top, dstW: halfW, dstH: halfH);
-          _centralizarConteudo(
-              base, raster, halfW, halfH, left, top, 0.35, 0.0, shiftYVenc);
-        } else {
-          if (!semOverlay && overlay != null) {
-            _fillCell(base, left, top, halfW, halfH);
-          }
-          _centralizarConteudo(
-              base, raster, halfW, halfH, left, top, 0.35, 0.03, 0.0);
+        // Vencimentos: o overlay (em tamanho nativo, correto nos assets)
+        // já foi composto em toda a página acima. Por célula, apenas
+        // escondemos o overlay nas comuns (fundo branco); as não-comuns
+        // mantêm o overlay nativo da página. Antes o overlay era desenhado
+        // novamente, escalado, por célula — duplicando/distorcendo em
+        // 2x1/4x1/6x1.
+        if (ehComum && !semOverlay && overlay != null) {
+          _fillCell(base, left, top, halfW, halfH);
         }
+        final ignorar = ehComum ? 0.03 : 0.0;
+        _centralizarConteudo(
+            base, raster, halfW, halfH, left, top, 0.35, ignorar, shiftYVenc);
       } else {
         // Multi: overlay cobre a página toda; comum recebe fundo branco.
         if (ehComum && !semOverlay && overlay != null) {
