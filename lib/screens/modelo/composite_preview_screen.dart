@@ -218,40 +218,19 @@ Future<List<Uint8List>> buildCompositePages({
         isLandscape ? 0.015 : (cols == 2 && rows == 2 ? 0.01 : 0.03);
     final shiftYMulti = isLandscape ? 0.015 : 0.03;
 
-    // Rasteriza os cards da página em SEQUÊNCIA (com tolerância a falha por
-    // item). O processamento paralelo causava crash do app com várias
-    // etiquetas: alocação simultânea de bitmaps grandes (estouro de memória),
-    // chamadas concorrentes ao canal nativo minhaloja/pdf e chamadas
-    // concorrentes a picture.toImage() (modo Vencimentos). Cada item que
-    // falhar é ignorado (null) em vez de derrubar toda a página.
+    // Rasteriza os cards da página em PARALELO com limite de concorrência
+    // (mesma estratégia do MLoja, que dispara as chamadas à API via
+    // coroutines). O limite contém o pico de memória de bitmaps grandes e as
+    // chamadas ao canal nativo minhaloja/pdf (que já são serializadas na
+    // thread principal do Android). O desenho da validade (picture.toImage)
+    // permanece SEQUENCIAL — era a fonte de crash quando concorrente.
+    // Cada item que falhar é ignorado (null) em vez de derrubar a página.
     final pageIdx = <int>[];
     for (int idx = p * gridCap; idx < total && idx < (p + 1) * gridCap; idx++) {
       pageIdx.add(idx);
     }
-    final rasters = <img.Image?>[];
-    for (final idx in pageIdx) {
-      final item = items[idx];
-      final validade = validades.length > idx ? validades[idx] : null;
-      img.Image? r;
-      try {
-        r = await _rasterizeCard(api, item, halfW, halfH);
-      } catch (e) {
-        LogHelper.e('Composite: erro item $idx', e);
-        r = null;
-      }
-      if (r == null) {
-        rasters.add(null);
-        continue;
-      }
-      if (modoVencimentos && validade != null && validade.trim().isNotEmpty) {
-        try {
-          r = await _drawVencimento(r, validade.trim(), halfW, halfH);
-        } catch (e) {
-          LogHelper.e('Composite: erro validade item $idx', e);
-        }
-      }
-      rasters.add(r);
-    }
+    final rasters = await _rasterizarPagina(
+        api, items, validades, pageIdx, halfW, halfH);
 
     for (int k = 0; k < pageIdx.length; k++) {
       final idx = pageIdx[k];
@@ -374,6 +353,50 @@ void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
       .clamp(-cellW * maxShiftFrac, cellW * maxShiftFrac);
   img.compositeImage(base, bmp,
       dstX: (left + dx).round(), dstY: dstY, dstW: cellW, dstH: cellH);
+}
+
+/// Rasteriza os itens da página em paralelo com concorrência limitada
+/// (busca na API + render nativo, como as coroutines do MLoja) e depois
+/// desenha a validade em sequência (picture.toImage não deve ser concorrente).
+Future<List<img.Image?>> _rasterizarPagina(
+    ApiService api,
+    List<PapeletaPrintingData> items,
+    List<String> validades,
+    List<int> pageIdx,
+    int halfW,
+    int halfH) async {
+  final results = List<img.Image?>.filled(pageIdx.length, null);
+  var next = 0;
+  Future<void> worker() async {
+    while (true) {
+      final i = next++;
+      if (i >= pageIdx.length) return;
+      final idx = pageIdx[i];
+      try {
+        results[i] = await _rasterizeCard(api, items[idx], halfW, halfH);
+      } catch (e) {
+        LogHelper.e('Composite: erro item $idx', e);
+        results[i] = null;
+      }
+    }
+  }
+
+  final nWorkers = pageIdx.length < 3 ? pageIdx.length : 3;
+  await Future.wait(List.generate(nWorkers, (_) => worker()));
+
+  for (int i = 0; i < pageIdx.length; i++) {
+    final r = results[i];
+    if (r == null) continue;
+    final validade = validades.length > pageIdx[i] ? validades[pageIdx[i]] : null;
+    if (validade != null && validade.trim().isNotEmpty) {
+      try {
+        results[i] = await _drawVencimento(r, validade.trim(), halfW, halfH);
+      } catch (e) {
+        LogHelper.e('Composite: erro validade item ${pageIdx[i]}', e);
+      }
+    }
+  }
+  return results;
 }
 
 Future<img.Image?> _rasterizeCard(
