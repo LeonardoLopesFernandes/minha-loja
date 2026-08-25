@@ -390,7 +390,7 @@ Future<img.Image> _camadaTextosVencimento(int w, int h, String validade) async {
     tp.paint(canvas, Offset((w - tp.width) / 2, y - tp.height / 2));
   }
 
-  draw('VAL.: ${txt.toUpperCase()}', h * 0.28, w / 18);
+  draw('VAL.: ${txt.toUpperCase()}', h * 0.24, w / 18);
   draw('PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO', h * 0.88,
       (w / 32).clamp(8, 26).toDouble());
   final picture = recorder.endRecording();
