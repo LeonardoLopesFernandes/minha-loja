@@ -506,7 +506,15 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
           itemCount: _pages.length,
           onPageChanged: (i) => setState(() => _page = i),
           itemBuilder: (_, i) => InteractiveViewer(
-            child: Image.memory(_pages[i], fit: BoxFit.contain),
+            child: Image.memory(
+              _pages[i],
+              fit: BoxFit.contain,
+              cacheWidth: (MediaQuery.of(context).size.width *
+                      MediaQuery.of(context).devicePixelRatio)
+                  .round()
+                  .clamp(720, 2160),
+              gaplessPlayback: true,
+            ),
           ),
         ),
         Positioned(

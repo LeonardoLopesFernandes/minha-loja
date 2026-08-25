@@ -137,9 +137,22 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
     return PageView.builder(
       itemCount: _pages.length,
       onPageChanged: (i) => setState(() => _page = i),
-      itemBuilder: (_, i) => InteractiveViewer(
-        child: Image.memory(_pages[i], fit: BoxFit.contain),
-      ),
+      itemBuilder: (_, i) {
+        // Decodifica no tamanho da TELA (não na resolução nativa 2898x2048):
+        // texturas gigantes estouram a GPU/Impeller ao deslizar/zoom.
+        final dpr = MediaQuery.of(context).devicePixelRatio;
+        final cw =
+            (MediaQuery.of(context).size.width * dpr).round().clamp(720, 2160);
+        return InteractiveViewer(
+          maxScale: 4,
+          child: Image.memory(
+            _pages[i],
+            fit: BoxFit.contain,
+            cacheWidth: cw,
+            gaplessPlayback: true,
+          ),
+        );
+      },
     );
   }
 }
