@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -82,6 +83,7 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
         modoVencimentos: widget.modoVencimentos,
         validades: widget.validades,
         previewScale: 1.0,
+        jpegPreview: true,
       );
       if (!mounted) return;
       setState(() {
@@ -160,6 +162,7 @@ Future<List<Uint8List>> buildCompositePages({
   required List<String> validades,
   bool semOverlay = false,
   double previewScale = 1.0,
+  bool jpegPreview = false,
 }) async {
   final s = size.toUpperCase().replaceAll('×', 'X');
   int cols = 2;
@@ -237,8 +240,21 @@ Future<List<Uint8List>> buildCompositePages({
           if (i >= idxN.length) return;
           final idx = idxN[i];
           try {
-            pdfBytes[i] = await api
-                .previewPriceSign(items[idx].copyWith(size: Constants.signSize1x1));
+            final key = _pdfCacheKey(items[idx]);
+            final cached = key == null ? null : _pdfApiCache[key];
+            if (cached != null) {
+              pdfBytes[i] = cached;
+            } else {
+              final b = await api.previewPriceSign(
+                  items[idx].copyWith(size: Constants.signSize1x1));
+              pdfBytes[i] = b;
+              if (key != null) {
+                if (_pdfApiCache.length > 60) {
+                  _pdfApiCache.remove(_pdfApiCache.keys.first);
+                }
+                _pdfApiCache[key] = b;
+              }
+            }
           } catch (e) {
             LogHelper.e('Composite: erro item $idx', e);
           }
@@ -275,6 +291,7 @@ Future<List<Uint8List>> buildCompositePages({
         'validades': vds,
         'shiftVenc': shiftYVenc,
         'shiftMulti': shiftYMulti,
+        'format': jpegPreview ? 'jpeg' : 'png',
       });
       final path = res?['path'] as String?;
       if (path != null && path.isNotEmpty) {
@@ -581,6 +598,22 @@ Future<img.Image?> _rasterizeCard(
 }
 
 const _pdfChannel = MethodChannel('minhaloja/pdf');
+
+/// Cache em memória dos PDFs da API por conteúdo do item: alternar overlay,
+/// quantidade ou regerar os mesmos itens NÃO refaz rede — fluidez igual ao
+/// MLoja (que se beneficia do cache HTTP do OkHttp).
+final Map<String, Uint8List> _pdfApiCache = <String, Uint8List>{};
+
+String? _pdfCacheKey(PapeletaPrintingData d) {
+  try {
+    final j = d.copyWith(size: Constants.signSize1x1).toJson();
+    j.remove('quantity');
+    j.remove('_quantity');
+    return json.encode(j);
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Renderiza o PDF da API via canal nativo e devolve o PNG cru (sem
 /// decodificar em Dart) — usado pela composição nativa da página.

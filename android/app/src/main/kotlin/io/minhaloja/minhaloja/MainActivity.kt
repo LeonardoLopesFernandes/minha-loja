@@ -71,7 +71,8 @@ class MainActivity : FlutterActivity() {
                                 call.argument<List<Double>>("topFracs") ?: emptyList(),
                                 call.argument<List<String>>("validades") ?: emptyList(),
                                 (call.argument<Double>("shiftVenc") ?: 0.015).toFloat(),
-                                (call.argument<Double>("shiftMulti") ?: 0.03).toFloat()
+                                (call.argument<Double>("shiftMulti") ?: 0.03).toFloat(),
+                                call.argument<String>("format") ?: "png"
                             )
                             result.success(page)
                         } catch (t: Throwable) {
@@ -110,7 +111,8 @@ class MainActivity : FlutterActivity() {
         topFracs: List<Double>,
         validades: List<String>,
         shiftVenc: Float,
-        shiftMulti: Float
+        shiftMulti: Float,
+        format: String
     ): Map<String, Any> {
         val ovW = cellW * cols
         val ovH = cellH * rows
@@ -155,8 +157,14 @@ class MainActivity : FlutterActivity() {
         }
         overlay?.recycle()
 
-        val out = File(cacheDir, "page_${System.currentTimeMillis()}.png")
-        FileOutputStream(out).use { page.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // JPEG (preview) codifica ~3x mais rápido que PNG; a página composta
+        // é opaca, então não há perda de transparência. Impressão/PDF usa PNG.
+        val isJpeg = format.equals("jpeg", ignoreCase = true)
+        val out = File(cacheDir, "page_${System.nanoTime()}.${if (isJpeg) "jpg" else "png"}")
+        FileOutputStream(out).use {
+            if (isJpeg) page.compress(Bitmap.CompressFormat.JPEG, 92, it)
+            else page.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
         val res =
             mapOf<String, Any>("path" to out.absolutePath, "width" to page.width, "height" to page.height)
         page.recycle()

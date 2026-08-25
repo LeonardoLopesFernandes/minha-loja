@@ -178,6 +178,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         validades: _validades(),
         semOverlay: _semOverlay,
         previewScale: 1.0,
+        jpegPreview: true,
       );
       _page = 0;
       if (mounted) setState(() => _loadingPreview = false);
