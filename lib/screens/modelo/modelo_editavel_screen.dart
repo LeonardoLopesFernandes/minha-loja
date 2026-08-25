@@ -9,6 +9,7 @@ import 'package:minhaloja/models/models.dart';
 import 'package:minhaloja/network/api_client.dart';
 import 'package:minhaloja/network/api_service.dart';
 import 'package:minhaloja/screens/modelo/composite_preview_screen.dart';
+import 'package:minhaloja/utils/crash_logger.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 import 'package:minhaloja/utils/session_expired_handler.dart';
 import 'package:minhaloja/utils/toast_utils.dart';
@@ -170,6 +171,8 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     });
     try {
       final list = _selecionados();
+      await CrashLogger
+          .step('modelo: iniciando geracao itens=${list.length} $_size');
       _pages = await buildCompositePages(
         api: api,
         items: list,
@@ -178,11 +181,16 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         validades: _validades(),
         semOverlay: _semOverlay,
         previewScale: 1.0,
-        jpegPreview: true,
+        // Diagnóstico: PNG no lugar do JPEG — se o crash sumir, o culpado é
+        // o decodificador de JPEG ao subir a textura.
+        jpegPreview: false,
       );
       _page = 0;
       if (mounted) setState(() => _loadingPreview = false);
+      await CrashLogger.step(
+          'modelo: exibindo ${_pages.length} pagina(s)');
     } catch (e) {
+      await CrashLogger.write('ModeloPreview', '$e');
       LogHelper.e('ModeloEditavel: erro preview', e);
       if (mounted) {
         setState(() {
@@ -514,6 +522,10 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
                   .round()
                   .clamp(720, 2160),
               gaplessPlayback: true,
+              errorBuilder: (_, e, __) {
+                CrashLogger.write('ImageDecodeModelo', 'pagina $i: $e');
+                return const Icon(Icons.broken_image, size: 64);
+              },
             ),
           ),
         ),

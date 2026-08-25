@@ -84,7 +84,7 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
         modoVencimentos: widget.modoVencimentos,
         validades: widget.validades,
         previewScale: 1.0,
-        jpegPreview: true,
+        jpegPreview: false,
       );
       if (!mounted) return;
       setState(() {
