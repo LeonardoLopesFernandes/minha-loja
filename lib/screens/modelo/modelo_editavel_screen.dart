@@ -161,7 +161,9 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   }
 
   Future<void> _gerarPreview() async {
-    if (_items.isEmpty) {
+    // Trava de reentrada: toques repetidos não disparam gerações concorrentes
+    // (threads nativas simultâneas derrubavam o app por memória/ANR).
+    if (_loadingPreview || _items.isEmpty) {
       return;
     }
     if (!mounted) {
@@ -532,7 +534,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
           itemBuilder: (_, i) {
             // TESTE BINÁRIO: oculta a imagem para provar se o crash está na
             // exibição ou alhures. _kPreviewMostraImagem = false -> placeholder.
-            const _kPreviewMostraImagem = false;
+            const _kPreviewMostraImagem = true;
             CrashLogger.step('modelo: montando pagina $i (img=$_kPreviewMostraImagem)');
             final img = _kPreviewMostraImagem
                 ? Image.memory(
