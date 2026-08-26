@@ -54,6 +54,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   bool _gerando = false;
   bool _loadingPreview = false;
   String? _errorPreview;
+  Timer? _hb;
 
   /// Comum pura (não Vencimentos) → envio via API; demais → PDF via socket.
   late bool _enviarApi;
@@ -72,6 +73,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
 
   @override
   void dispose() {
+    _hb?.cancel();
     for (final c in _ctrls) {
       c.dispose();
     }
@@ -173,6 +175,14 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
       final list = _selecionados();
       await CrashLogger
           .step('modelo: iniciando geracao itens=${list.length} $_size');
+      // Heartbeat de 1s por 90s: se os hb pararem no log, a main thread
+      // congelou (ANR); se continuarem, o travamento está fora do Dart.
+      _hb?.cancel();
+      var n = 0;
+      _hb = Timer.periodic(const Duration(seconds: 1), (t) {
+        CrashLogger.step('hb ${++n}');
+        if (n >= 90) t.cancel();
+      });
       _pages = await buildCompositePages(
         api: api,
         items: list,
@@ -511,7 +521,9 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     }
     return Stack(
       children: [
-        PageView.builder(
+        Listener(
+          onPointerDown: (_) => CrashLogger.step('modelo: touch'),
+          child: PageView.builder(
           itemCount: _pages.length,
           onPageChanged: (i) {
             CrashLogger.step('modelo: swipe pagina $i');
@@ -548,6 +560,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
                   );
             return InteractiveViewer(maxScale: 4, child: img);
           },
+        ),
         ),
         Positioned(
           top: 8,
