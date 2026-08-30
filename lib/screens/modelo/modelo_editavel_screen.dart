@@ -337,6 +337,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     final previewH = (h * 0.55).clamp(280.0, 620.0);
     return Scaffold(
       backgroundColor: _kBg,
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         bottom: false,
         child: Column(
