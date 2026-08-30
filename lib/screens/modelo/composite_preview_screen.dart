@@ -481,8 +481,8 @@ void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
   // Apenas a horizontal é medida (igual ao MLoja): não há dy vertical.
   int minX = sw;
   int maxX = -1;
-  for (int y = by0; y < by1; y += 2) {
-    for (int x = bx0; x < bx1; x += 2) {
+  for (int y = by0; y < by1; y += 4) {
+    for (int x = bx0; x < bx1; x += 4) {
       final p = small.getPixel(x, y);
       if (p.a > 8 && (p.r < 250 || p.g < 250 || p.b < 250)) {
         if (x < minX) minX = x;
@@ -614,7 +614,7 @@ Future<img.Image?> _rasterizeCard(
     int scale = (w / pw).ceil();
     final ch = (h / ph).ceil();
     if (ch < scale) scale = ch;
-    if (scale > 8) scale = 8;
+    if (scale > 4) scale = 4;
     if (scale < 1) scale = 1;
     int renderWidth = (pw * scale).round();
     if (renderWidth > 7200) renderWidth = 7200;

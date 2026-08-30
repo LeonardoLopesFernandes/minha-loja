@@ -200,7 +200,7 @@ class MainActivity : FlutterActivity() {
 
         for (i in pdfs.indices) {
             bstep("celula $i render inicio")
-            val bmp = renderPdfToBitmap(pdfs[i], cellW, cellH) ?: continue
+            val bmp = renderPdfToBitmap(pdfs[i], cellW, cellH, maxScale = 4) ?: continue
             removerBrancoSuave(bmp)
             bstep("celula $i ok ${bmp.width}x${bmp.height}")
 
@@ -257,7 +257,7 @@ class MainActivity : FlutterActivity() {
     }
 
     /** Renderiza a 1a página do PDF num bitmap na proporção nativa (~alvo). */
-    private fun renderPdfToBitmap(bytes: ByteArray, targetW: Int, targetH: Int): Bitmap? {
+    private fun renderPdfToBitmap(bytes: ByteArray, targetW: Int, targetH: Int, maxScale: Int = 8): Bitmap? {
         val file = File(cacheDir, "pdf_cell_${System.nanoTime()}.pdf")
         file.outputStream().use { it.write(bytes) }
         val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
@@ -270,7 +270,7 @@ class MainActivity : FlutterActivity() {
                 val s1 = ceil(targetW / pw)
                 val s2 = ceil(targetH / ph)
                 var scaleD = if (s1 < s2) s1 else s2
-                if (scaleD > 8.0) scaleD = 8.0
+                if (scaleD > maxScale.toDouble()) scaleD = maxScale.toDouble()
                 if (scaleD < 1.0) scaleD = 1.0
                 val sInt = scaleD.toInt()
                 val rw = (pw * sInt).toInt().coerceAtMost(7200)
@@ -315,9 +315,9 @@ class MainActivity : FlutterActivity() {
                             if (x > maxX) maxX = x
                         }
                     }
-                    x += 2
+                    x += 4
                 }
-                y += 2
+                y += 4
             }
             val dstTop = top - cellH * shiftYFrac
             if (maxX <= minX) {
