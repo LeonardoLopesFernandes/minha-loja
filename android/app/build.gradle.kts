@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -36,16 +38,16 @@ android {
 
     signingConfigs {
         create("release") {
-            val props = java.util.Properties()
+            val props = Properties()
             val propFile = rootProject.file("key.properties")
             if (propFile.exists()) {
-                props.load(propFile.inputStream())
+                propFile.inputStream().use { props.load(it) }
             }
-            keyAlias = props.getProperty("keyAlias", "minhaloja")
-            keyPassword = props.getProperty("keyPassword", "minhaloja123")
-            storeFile = props.getProperty("storeFile")?.let { rootProject.file(it) }
+            keyAlias = props.getProperty("keyAlias") ?: "minhaloja"
+            keyPassword = props.getProperty("keyPassword") ?: "minhaloja123"
+            storeFile = props.getProperty("storeFile")?.let { f -> rootProject.file(f) }
                 ?: rootProject.file("app/release-key.jks")
-            storePassword = props.getProperty("storePassword", "minhaloja123")
+            storePassword = props.getProperty("storePassword") ?: "minhaloja123"
         }
     }
 
