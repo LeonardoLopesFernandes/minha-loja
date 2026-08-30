@@ -34,11 +34,24 @@ android {
         resourceConfigurations += listOf("pt", "en")
     }
 
+    signingConfigs {
+        create("release") {
+            val props = java.util.Properties()
+            val propFile = rootProject.file("key.properties")
+            if (propFile.exists()) {
+                props.load(propFile.inputStream())
+            }
+            keyAlias = props.getProperty("keyAlias", "minhaloja")
+            keyPassword = props.getProperty("keyPassword", "minhaloja123")
+            storeFile = props.getProperty("storeFile")?.let { rootProject.file(it) }
+                ?: rootProject.file("app/release-key.jks")
+            storePassword = props.getProperty("storePassword", "minhaloja123")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
