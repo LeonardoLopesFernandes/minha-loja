@@ -224,9 +224,9 @@ Future<List<Uint8List>> buildCompositePages({
   for (int p = 0; p < pageCount; p++) {
     final ovW0 = overlay?.width ?? (cols > rows ? 1200 : 850);
     final ovH0 = overlay?.height ?? (cols > rows ? 850 : 1200);
-    // previewScale < 1 deixa o preview mais rápido (menor resolução) sem
-    // afetar a qualidade de impressão/compartilhamento (que usa 1.0).
-    final scale = previewScale > 0 && previewScale <= 1 ? previewScale : 1.0;
+    // previewScale < 1 deixa o preview mais rápido (menor resolução).
+    // previewScale > 1 aumenta resolução para compartilhar/impressão (até 3x).
+    final scale = previewScale > 0 ? previewScale.clamp(0.1, 3.0) : 1.0;
     final ovW = (ovW0 * scale).round().clamp(1, 100000);
     final ovH = (ovH0 * scale).round().clamp(1, 100000);
     final base = img.Image(width: ovW, height: ovH,

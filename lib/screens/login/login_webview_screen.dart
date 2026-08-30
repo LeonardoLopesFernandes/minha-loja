@@ -160,11 +160,31 @@ class _LoginWebViewScreenState extends State<LoginWebViewScreen> {
     _injectTimer?.cancel();
     _timeoutTimer?.cancel();
     _session.saveToken(token);
-    _session.saveUserInfo(
-      'leonardo.lfernandes@americanas.io',
-      'Leonardo Lopes Fernandes',
-      'L291',
-    );
+
+    String email = _email.isNotEmpty ? _email : '';
+    String nome = '';
+
+    // Tenta extrair email/nome do payload JWT
+    try {
+      final parts = token.split('.');
+      if (parts.length == 3) {
+        final payload = parts[1];
+        final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+        final padded = normalized + ('=' * (4 - normalized.length % 4));
+        final decoded = String.fromCharCodes(base64.decode(padded));
+        final Map<String, dynamic> data = jsonDecode(decoded);
+        if (email.isEmpty) email = data['email'] ?? data['preferred_username'] ?? data['upn'] ?? '';
+        nome = data['name'] ?? data['given_name'] ?? '';
+      }
+    } catch (_) {}
+
+    if (email.isEmpty) email = 'usuario@americanas.io';
+    if (nome.isEmpty) {
+      nome = email.split('@').first.replaceAll('.', ' ').replaceAll('_', ' ');
+      nome = nome.split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : w).join(' ');
+    }
+
+    _session.saveUserInfo(email, nome, 'L291');
     if (mounted) {
       ToastUtils.showSuccess(context, 'Login realizado com sucesso');
       Navigator.pushReplacementNamed(context, '/main');
