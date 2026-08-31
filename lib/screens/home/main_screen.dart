@@ -216,8 +216,21 @@ class _MainScreenState extends State<MainScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset('assets/icons/logo_menu.png',
-              width: 120, height: 48, fit: BoxFit.fitWidth),
+          Row(
+            children: [
+              Image.asset('assets/icons/logo_menu.png',
+                  width: 40, height: 40, fit: BoxFit.contain),
+              const SizedBox(width: 8),
+              const Text(
+                'minha loja',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           _menuItem('assets/icons/eti_avulsa.png', 'ETIQUETA AVULSA',
               () => _onMenuItem(0)),

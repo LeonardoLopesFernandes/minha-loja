@@ -563,7 +563,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
                           style: TextStyle(fontSize: 13, color: Colors.black54)),
                     ],
                   );
-            return InteractiveViewer(maxScale: 4, child: img);
+            return img;
           },
         ),
         ),

@@ -510,7 +510,10 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
                               background: Container(
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 16),
-                                color: const Color(0xFFD32F2F),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFD32F2F),
+                                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                                ),
                                 child: const Icon(Icons.delete, color: Colors.white),
                               ),
                               onDismissed: (_) => _deleteTag(tag),

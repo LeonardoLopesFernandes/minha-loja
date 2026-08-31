@@ -145,23 +145,18 @@ class _CompositePreviewScreenState extends State<CompositePreviewScreen> {
         setState(() => _page = i);
       },
       itemBuilder: (_, i) {
-        // Decodifica no tamanho da TELA (não na resolução nativa 2898x2048):
-        // texturas gigantes estouram a GPU/Impeller ao deslizar/zoom.
         final dpr = MediaQuery.of(context).devicePixelRatio;
         final cw =
             (MediaQuery.of(context).size.width * dpr).round().clamp(720, 2160);
-        return InteractiveViewer(
-          maxScale: 4,
-          child: Image.memory(
-            _pages[i],
-            fit: BoxFit.contain,
-            cacheWidth: cw,
-            gaplessPlayback: true,
-            errorBuilder: (_, e, __) {
-              CrashLogger.write('ImageDecode', 'pagina $i: $e');
-              return const Icon(Icons.broken_image, size: 64);
-            },
-          ),
+        return Image.memory(
+          _pages[i],
+          fit: BoxFit.contain,
+          cacheWidth: cw,
+          gaplessPlayback: true,
+          errorBuilder: (_, e, __) {
+            CrashLogger.write('ImageDecode', 'pagina $i: $e');
+            return const Icon(Icons.broken_image, size: 64);
+          },
         );
       },
     );
