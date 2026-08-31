@@ -592,38 +592,55 @@ class _PriceTagCardState extends State<PriceTagCard> {
               ],
             ),
             if (showPromo || showPrice) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  if (showPromo)
-                    Text(b.promo!,
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _green,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(showPromo ? b.promo! : b.price!,
                         style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: _redBrand)),
-                  if (showPromo && showPrice)
-                    const Text(' | ',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: _descDark)),
-                  if (showPrice)
-                    Text(b.price!,
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: _primary)),
-                  const Spacer(),
-                  _Badge(b.badge, b.badgeColor),
-                ],
+                            color: Colors.white)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(b.badge,
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: b.badgeColor)),
+                    ),
+                  ],
+                ),
               ),
             ] else ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Spacer(),
-                  _Badge(b.badge, b.badgeColor),
-                ],
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _green,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(b.badge,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                  ],
+                ),
               ),
             ],
           ],
@@ -777,38 +794,55 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
               ],
             ),
             if (showPromo || showPrice) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  if (showPromo)
-                    Text(b.promo!,
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _green,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(showPromo ? b.promo! : b.price!,
                         style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: _redBrand)),
-                  if (showPromo && showPrice)
-                    const Text(' | ',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: _descDark)),
-                  if (showPrice)
-                    Text(b.price!,
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: _primary)),
-                  const Spacer(),
-                  _Badge(b.badge, b.badgeColor),
-                ],
+                            color: Colors.white)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(b.badge,
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: b.badgeColor)),
+                    ),
+                  ],
+                ),
               ),
             ] else ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Spacer(),
-                  _Badge(b.badge, b.badgeColor),
-                ],
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _green,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(b.badge,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                  ],
+                ),
               ),
             ],
           ],

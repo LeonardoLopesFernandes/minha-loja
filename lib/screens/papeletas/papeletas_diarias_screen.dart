@@ -108,9 +108,12 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
       _selectedSize = _sizes.first;
 
       final deptFilters = await _api.getPriceTagFilters(_storeId, _currentDate);
-      _departments = deptFilters.departments;
-
-      await _loadSigns();
+      _departments = deptFilters.departments.toList()
+        ..sort((a, b) {
+          final na = int.tryParse(a.id) ?? 0;
+          final nb = int.tryParse(b.id) ?? 0;
+          return na.compareTo(nb);
+        });
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
@@ -172,12 +175,13 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
     }
   }
 
-  int? _deptNumber(String department) {
+  String? _deptNumber(String department) {
     final num = department.split(' -').first.trim();
-    return int.tryParse(num);
+    return num.isNotEmpty ? num : null;
   }
 
   void _onNextDay() {
+    if (_currentDate != _today) return;
     setState(() {
       final next = _fromApi(_currentDate).add(const Duration(days: 1));
       _currentDate = _toApi(next);
@@ -386,18 +390,18 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: _onNextDay,
+                  onTap: isTomorrow ? null : _onNextDay,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: isTomorrow ? AppColors.accent : Colors.blue,
+                      color: isTomorrow ? Colors.grey.shade300 : Colors.blue,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Center(
                       child: Text(
                         'Amanhã ${_toDisplay(_toApi(nextDay))}',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: isTomorrow ? Colors.grey.shade500 : Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

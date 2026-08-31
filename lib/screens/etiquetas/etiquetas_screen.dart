@@ -27,6 +27,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
 
   bool _isLoading = false;
   List<PriceTag> _items = [];
+  List<PriceTag> _allItems = [];
 
   String _currentDate = '';
   String _today = '';
@@ -79,21 +80,20 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
   Future<void> _loadInit() async {
     setState(() => _isLoading = true);
     try {
-      final menu = await _api.getPriceTags(_storeId, _currentDate);
-      final info = menu.page.infoTag;
-      _naoImpressas = info.unprintedTags;
-      _impressas = info.printedTags;
-      _total = info.totalTags;
       final filters = await _api.getPriceTagFilters(_storeId, _currentDate);
       _printers = (filters.tags)
           .where((t) => (t.printerId).toUpperCase().contains('ZEBRA'))
           .toList();
-      _departments = filters.departments;
+      _departments = filters.departments.toList()
+        ..sort((a, b) {
+          final na = int.tryParse(a.id) ?? 0;
+          final nb = int.tryParse(b.id) ?? 0;
+          return na.compareTo(nb);
+        });
       if (_printers.isNotEmpty) {
         _selectedPrinterId = _printers.first.printerId;
         _selectedTagId = _printers.first.tagId;
       }
-      await _loadTags();
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
@@ -125,6 +125,10 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
       list.sort((a, b) => _deptNumber(a.department)
           .toString()
           .compareTo(_deptNumber(b.department).toString()));
+      _allItems = list;
+      _naoImpressas = list.where((e) => e.status == Constants.statusNaoImpressas).length;
+      _impressas = list.where((e) => e.status == Constants.statusImpressas).length;
+      _total = list.length;
       setState(() => _items = list);
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
@@ -142,9 +146,9 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
     }
   }
 
-  int? _deptNumber(String department) {
+  String? _deptNumber(String department) {
     final num = department.split(' -').first.trim();
-    return int.tryParse(num);
+    return num.isNotEmpty ? num : null;
   }
 
   String _printerLabel(String label) {
@@ -162,11 +166,12 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
       _selectedDepartments.length == _departments.length;
 
   void _onNextDay() {
+    if (_currentDate != _today) return;
     setState(() {
       final next = _fromApi(_currentDate).add(const Duration(days: 1));
       _currentDate = _toApi(next);
     });
-    _loadInit();
+    _loadTags();
   }
 
   void _onSelectAll(bool? value) {
@@ -225,7 +230,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
         SendPriceTagsRequest(products: data),
       );
       ToastUtils.showSuccess(context, 'Enviado para impressão');
-      await _loadInit();
+      await _loadTags();
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         SessionExpiredHandler.handleSessionExpired(context);
@@ -366,7 +371,7 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
                   onTap: () {
                     if (isTomorrow) {
                       _currentDate = _today;
-                      _loadInit();
+                      _loadTags();
                     }
                   },
                   child: Container(
@@ -390,18 +395,18 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: _onNextDay,
+                  onTap: isTomorrow ? null : _onNextDay,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: isTomorrow ? AppColors.accent : Colors.blue,
+                      color: isTomorrow ? Colors.grey.shade300 : Colors.blue,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Center(
                       child: Text(
                         'Amanhã ${_toDisplay(_toApi(nextDay))}',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: isTomorrow ? Colors.grey.shade500 : Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
