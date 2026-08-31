@@ -277,7 +277,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         modoVencimentos: _modoVencimentos,
         validades: _validades(),
         semOverlay: _semOverlay,
-        previewScale: 4.0,
+        previewScale: 1.0,
         targetCanvasW: a4Canvas[0],
         targetCanvasH: a4Canvas[1],
       );
@@ -315,7 +315,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         modoVencimentos: _modoVencimentos,
         validades: _validades(),
         semOverlay: _semOverlay,
-        previewScale: 4.0,
+        previewScale: 1.0,
         targetCanvasW: a4Canvas[0],
         targetCanvasH: a4Canvas[1],
       );

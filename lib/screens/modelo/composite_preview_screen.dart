@@ -244,8 +244,10 @@ Future<List<Uint8List>> buildCompositePages({
     final ovW0 = targetCanvasW ?? overlay?.width ?? (cols > rows ? 1200 : 850);
     final ovH0 = targetCanvasH ?? overlay?.height ?? (cols > rows ? 850 : 1200);
     // previewScale < 1 deixa o preview mais rápido (menor resolução).
-    // previewScale > 1 aumenta resolução para compartilhar/impressão (até 4x).
-    final scale = previewScale > 0 ? previewScale.clamp(0.1, 4.0) : 1.0;
+    // Quando targetCanvasW/H são fornecidos (A4 1200 DPI), previewScale é ignorado.
+    final scale = (targetCanvasW != null || targetCanvasH != null)
+        ? 1.0
+        : (previewScale > 0 ? previewScale.clamp(0.1, 4.0) : 1.0);
     final ovW = (ovW0 * scale).round().clamp(1, 100000);
     final ovH = (ovH0 * scale).round().clamp(1, 100000);
     final base = img.Image(width: ovW, height: ovH,
