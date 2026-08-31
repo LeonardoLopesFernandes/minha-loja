@@ -261,7 +261,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         semOverlay: _semOverlay,
         previewScale: 4.0,
       );
-      final pdfBytes = await _gerarPdfBytes(_comCopias(pages));
+      final pdfBytes = await _gerarPdfBytes(_comCopias(pages), _size);
       final socket = await Socket.connect(_kPrinterIp, _kPrinterPort,
           timeout: const Duration(seconds: 5));
       socket.add(pdfBytes);
@@ -296,7 +296,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         semOverlay: _semOverlay,
         previewScale: 4.0,
       );
-      final pdfBytes = await _gerarPdfBytes(_comCopias(pages));
+      final pdfBytes = await _gerarPdfBytes(_comCopias(pages), _size);
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/papeletas.pdf');
       await file.writeAsBytes(pdfBytes);
@@ -313,12 +313,18 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     }
   }
 
-  Future<Uint8List> _gerarPdfBytes(List<Uint8List> pages) async {
+  Future<Uint8List> _gerarPdfBytes(List<Uint8List> pages, String size) async {
+    // MLoja: 2x1 (2 cols, 1 row) e 6x1 (3 cols, 2 rows) = landscape A4.
+    final s = size.toUpperCase().replaceAll('×', 'X');
+    final isLandscape = s == '2X1' || s == '6X1';
+    final pageFormat = isLandscape
+        ? PdfPageFormat.a4.landscape
+        : PdfPageFormat.a4;
     final doc = pw.Document();
     for (final png in pages) {
       doc.addPage(
         pw.Page(
-          pageFormat: PdfPageFormat.a4,
+          pageFormat: pageFormat,
           margin: const pw.EdgeInsets.all(14.0),
           build: (context) => pw.Center(
             child: pw.Image(pw.MemoryImage(png)),
