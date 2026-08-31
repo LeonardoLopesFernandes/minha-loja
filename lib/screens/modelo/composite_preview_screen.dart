@@ -183,6 +183,8 @@ Future<List<Uint8List>> buildCompositePages({
   double previewScale = 1.0,
   bool jpegPreview = false,
   int displayMaxDim = 0,
+  int? targetCanvasW,
+  int? targetCanvasH,
 }) async {
   final s = size.toUpperCase().replaceAll('×', 'X');
   int cols = 2;
@@ -239,8 +241,8 @@ Future<List<Uint8List>> buildCompositePages({
     }
     final isMisto = !modoVencimentos && hasComumPage && hasPromoPage;
 
-    final ovW0 = overlay?.width ?? (cols > rows ? 1200 : 850);
-    final ovH0 = overlay?.height ?? (cols > rows ? 850 : 1200);
+    final ovW0 = targetCanvasW ?? overlay?.width ?? (cols > rows ? 1200 : 850);
+    final ovH0 = targetCanvasH ?? overlay?.height ?? (cols > rows ? 850 : 1200);
     // previewScale < 1 deixa o preview mais rápido (menor resolução).
     // previewScale > 1 aumenta resolução para compartilhar/impressão (até 4x).
     final scale = previewScale > 0 ? previewScale.clamp(0.1, 4.0) : 1.0;
