@@ -343,6 +343,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   Widget build(BuildContext context) {
     final h = MediaQuery.of(context).size.height;
     final previewH = (h * 0.55).clamp(280.0, 620.0);
+    final kbHeight = MediaQuery.of(context).viewInsets.bottom;
     return Scaffold(
       backgroundColor: _kBg,
       resizeToAvoidBottomInset: false,
@@ -353,7 +354,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
             Expanded(
               child: SingleChildScrollView(
                 controller: _scrollCtrl,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8 + kbHeight),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

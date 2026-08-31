@@ -223,17 +223,21 @@ class MainActivity : FlutterActivity() {
                 // Vencimentos/Multi normal: comum recebe fundo branco.
                 cv.drawRect(left, top, left + cellW, top + cellH, whitePaint)
             }
+            // Fiel ao MLoja: escala o bitmap renderizado para o tamanho exato da
+            // célula ANTES de centralizar — bilinear filter garante nitidez.
+            val scaled = Bitmap.createScaledBitmap(bmp, cellW, cellH, true)
+            if (scaled !== bmp) bmp.recycle()
             val maxShift = if (modoVenc && !comum) 0.35f else 1f
             val ignorar = if (comum) 0.03f else 0f
             val shiftY = if (comum) 0f else (if (modoVenc) shiftVenc else shiftMulti)
-            centralizarConteudo(cv, bmp, cellW.toFloat(), cellH.toFloat(), left, top, maxShift, ignorar, shiftY)
+            centralizarConteudo(cv, scaled, cellW.toFloat(), cellH.toFloat(), left, top, maxShift, ignorar, shiftY)
 
             val vd = validades.getOrNull(i)?.trim() ?: ""
             if (modoVenc && vd.isNotEmpty()) {
                 val tf = (topFracs.getOrNull(i) ?: 0.25).toFloat()
                 desenharTextosVenc(cv, left, top, cellW.toFloat(), cellH.toFloat(), vd, tf)
             }
-            bmp.recycle()
+            scaled.recycle()
         }
         overlay?.recycle()
 
