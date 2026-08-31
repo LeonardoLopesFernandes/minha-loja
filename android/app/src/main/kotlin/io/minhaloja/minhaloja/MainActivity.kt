@@ -91,6 +91,7 @@ class MainActivity : FlutterActivity() {
                         val overlayName = call.argument<String>("overlay")
                         val semOverlay = call.argument<Boolean>("semOverlay") ?: false
                         val modoVenc = call.argument<Boolean>("vencimentos") ?: false
+                        val misto = call.argument<Boolean>("misto") ?: false
                         val comums = call.argument<List<Int>>("comums") ?: emptyList()
                         val topFracs = call.argument<List<Double>>("topFracs") ?: emptyList()
                         val validades = call.argument<List<String>>("validades") ?: emptyList()
@@ -110,7 +111,7 @@ class MainActivity : FlutterActivity() {
                             try {
                                 val page = composePageFromPdfs(
                                     pdfs, cols, rows, cellW, cellH,
-                                    overlayName, semOverlay, modoVenc,
+                                    overlayName, semOverlay, modoVenc, misto,
                                     comums, topFracs, validades,
                                     shiftVenc, shiftMulti, format, maxDim
                                 )
@@ -168,6 +169,7 @@ class MainActivity : FlutterActivity() {
         overlayName: String?,
         semOverlay: Boolean,
         modoVenc: Boolean,
+        misto: Boolean,
         comums: List<Int>,
         topFracs: List<Double>,
         validades: List<String>,
@@ -185,15 +187,15 @@ class MainActivity : FlutterActivity() {
         val cv = Canvas(page)
         cv.drawColor(Color.WHITE)
 
+        // Misto: fundo branco + overlay 1x1 individual por quadrante.
+        // Vencimentos/Multi normal: overlay full-page.
         var overlay: Bitmap? = null
         if (!semOverlay && overlayName != null) {
             val ob = assetBytes(overlayName)
             if (ob != null) overlay = BitmapFactory.decodeByteArray(ob, 0, ob.size)
         }
-        if (overlay != null) {
+        if (!misto && overlay != null) {
             cv.drawBitmap(overlay, null, RectF(0f, 0f, ovW.toFloat(), ovH.toFloat()), null)
-            overlay.recycle()
-            overlay = null
         }
 
         val whitePaint = Paint().apply { color = Color.WHITE }
@@ -208,7 +210,16 @@ class MainActivity : FlutterActivity() {
             val top = (i / cols) * cellH.toFloat()
             val comum = comums.getOrNull(i) == 1
 
-            if (comum && overlay != null && !semOverlay) {
+            if (misto) {
+                // Misto: overlay 1x1 individual por quadrante.
+                // Promocional → overlay. Comum → sem overlay (fundo branco).
+                if (!comum && overlay != null) {
+                    val src = Rect(0, 0, overlay.width, overlay.height)
+                    val dst = RectF(left, top, left + cellW, top + cellH)
+                    cv.drawBitmap(overlay, src, dst, null)
+                }
+            } else if (comum && overlay != null) {
+                // Vencimentos/Multi normal: comum recebe fundo branco.
                 cv.drawRect(left, top, left + cellW, top + cellH, whitePaint)
             }
             val maxShift = if (modoVenc && !comum) 0.35f else 1f

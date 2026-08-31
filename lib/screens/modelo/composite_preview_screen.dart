@@ -211,22 +211,45 @@ Future<List<Uint8List>> buildCompositePages({
       await rootBundle.load('assets/overlays/${s.toLowerCase()}.png');
   final overlay = img.decodeImage(overlayData.buffer.asUint8List());
 
+  // Misto: overlay 1x1 para desenhar por célula (promo recebe, comum não).
+  img.Image? overlay1x1;
+  if (s != '1X1') {
+    final ov1x1Data = await rootBundle.load('assets/overlays/1x1.png');
+    overlay1x1 = img.decodeImage(ov1x1Data.buffer.asUint8List());
+  }
+
   final gridCap = cols * rows;
   final total = items.length;
   final pageCount = total == 0 ? 1 : (total / gridCap).ceil();
   final out = <Uint8List>[];
 
   for (int p = 0; p < pageCount; p++) {
+    // Detecta Misto: página contém comum + promo mixados.
+    final pageStart = p * gridCap;
+    final pageEnd = (pageStart + gridCap).clamp(0, total);
+    var hasComumPage = false;
+    var hasPromoPage = false;
+    for (var pi = pageStart; pi < pageEnd; pi++) {
+      if (_ehComum(items[pi])) {
+        hasComumPage = true;
+      } else {
+        hasPromoPage = true;
+      }
+      if (hasComumPage && hasPromoPage) break;
+    }
+    final isMisto = !modoVencimentos && hasComumPage && hasPromoPage;
+
     final ovW0 = overlay?.width ?? (cols > rows ? 1200 : 850);
     final ovH0 = overlay?.height ?? (cols > rows ? 850 : 1200);
     // previewScale < 1 deixa o preview mais rápido (menor resolução).
-    // previewScale > 1 aumenta resolução para compartilhar/impressão (até 3x).
-    final scale = previewScale > 0 ? previewScale.clamp(0.1, 3.0) : 1.0;
+    // previewScale > 1 aumenta resolução para compartilhar/impressão (até 4x).
+    final scale = previewScale > 0 ? previewScale.clamp(0.1, 4.0) : 1.0;
     final ovW = (ovW0 * scale).round().clamp(1, 100000);
     final ovH = (ovH0 * scale).round().clamp(1, 100000);
     final base = img.Image(width: ovW, height: ovH,
         numChannels: 4, format: img.Format.uint8);
-    if (!semOverlay && overlay != null) {
+    // Misto: fundo branco + overlay 1x1 individual por célula (não full-page).
+    if (!isMisto && !semOverlay && overlay != null) {
       img.compositeImage(base, overlay, dstW: ovW, dstH: ovH);
     } else {
       img.fill(base, color: img.ColorRgb8(255, 255, 255));
@@ -296,6 +319,9 @@ Future<List<Uint8List>> buildCompositePages({
         vds.add(validades.length > idx ? validades[idx] : '');
         payload.add(pdfBytes[i] ?? Uint8List(0));
       }
+      final overlayName = isMisto
+          ? 'assets/overlays/1x1.png'
+          : 'assets/overlays/${s.toLowerCase()}.png';
       final res = await _pdfChannel.invokeMethod<Map<dynamic, dynamic>>(
           'composePage', {
         'pdfs': payload,
@@ -303,9 +329,10 @@ Future<List<Uint8List>> buildCompositePages({
         'rows': rows,
         'cellW': halfW,
         'cellH': halfH,
-        'overlay': 'assets/overlays/${s.toLowerCase()}.png',
+        'overlay': overlayName,
         'semOverlay': semOverlay,
         'vencimentos': modoVencimentos,
+        'misto': isMisto,
         'comums': comums,
         'topFracs': tops,
         'validades': vds,
@@ -385,8 +412,10 @@ Future<List<Uint8List>> buildCompositePages({
           }
         }
       } else {
-        // Multi: overlay cobre a página toda; comum recebe fundo branco.
-        if (ehComum && !semOverlay && overlay != null) {
+        // Multi/Misto: overlay por célula.
+        if (isMisto && !ehComum && !semOverlay && overlay1x1 != null) {
+          img.compositeImage(base, overlay1x1, dstX: left, dstY: top, dstW: halfW, dstH: halfH);
+        } else if (!isMisto && ehComum && !semOverlay && overlay != null) {
           _fillCell(base, left, top, halfW, halfH);
         }
         final ignorar = ehComum ? 0.03 : 0.0;

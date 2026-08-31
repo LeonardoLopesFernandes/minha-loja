@@ -259,7 +259,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         modoVencimentos: _modoVencimentos,
         validades: _validades(),
         semOverlay: _semOverlay,
-        previewScale: 3.0,
+        previewScale: 4.0,
       );
       final pdfBytes = await _gerarPdfBytes(_comCopias(pages));
       final socket = await Socket.connect(_kPrinterIp, _kPrinterPort,
@@ -294,7 +294,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
         modoVencimentos: _modoVencimentos,
         validades: _validades(),
         semOverlay: _semOverlay,
-        previewScale: 3.0,
+        previewScale: 4.0,
       );
       final pdfBytes = await _gerarPdfBytes(_comCopias(pages));
       final dir = await getTemporaryDirectory();
