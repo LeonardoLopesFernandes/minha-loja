@@ -536,6 +536,7 @@ class _PriceTagCardState extends State<PriceTagCard> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -738,6 +739,7 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [

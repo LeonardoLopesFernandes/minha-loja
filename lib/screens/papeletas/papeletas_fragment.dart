@@ -692,8 +692,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
                 }
                 _addByScan();
               },
-              child: Image.asset('assets/icons/ic_scanner.png',
-                  width: 24, height: 24, color: Colors.white),
+              child: const Icon(Icons.qr_code_scanner, color: Colors.white),
             ),
           ),
         ),
