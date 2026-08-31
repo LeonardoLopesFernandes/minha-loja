@@ -203,7 +203,7 @@ class MainActivity : FlutterActivity() {
 
         for (i in pdfs.indices) {
             bstep("celula $i render inicio")
-            val bmp = renderPdfToBitmap(pdfs[i], cellW, cellH, maxScale = 4) ?: continue
+            val bmp = renderPdfToBitmap(pdfs[i], cellW, cellH, maxScale = 6) ?: continue
             removerBrancoSuave(bmp)
             bstep("celula $i ok ${bmp.width}x${bmp.height}")
 
@@ -285,7 +285,7 @@ class MainActivity : FlutterActivity() {
                 if (scaleD > maxScale.toDouble()) scaleD = maxScale.toDouble()
                 if (scaleD < 1.0) scaleD = 1.0
                 val sInt = scaleD.toInt()
-                val rw = (pw * sInt).toInt().coerceAtMost(7200)
+                val rw = (pw * sInt).toInt().coerceAtMost(10000)
                 val rh = (ph * rw / pw).toInt()
                 val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
@@ -306,7 +306,7 @@ class MainActivity : FlutterActivity() {
     ) {
         try {
             val w = bmp.width; val h = bmp.height
-            val targetW = min(w, 800)
+            val targetW = min(w, 1200)
             val targetH = ((h * (targetW.toFloat() / w)).toInt()).coerceAtLeast(1)
             val small = if (targetW < w) Bitmap.createScaledBitmap(bmp, targetW, targetH, true) else bmp
             val sw = small.width; val sh = small.height
@@ -416,7 +416,7 @@ class MainActivity : FlutterActivity() {
                 if (scaleD > 8.0) scaleD = 8.0
                 if (scaleD < 1.0) scaleD = 1.0
                 val sInt = scaleD.toInt()
-                val rw = (pw * sInt).toInt().coerceAtMost(7200)
+                val rw = (pw * sInt).toInt().coerceAtMost(10000)
                 val rh = (ph * rw / pw).toInt()
                 val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)

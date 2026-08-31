@@ -493,7 +493,7 @@ void _centralizarConteudo(img.Image base, img.Image bmp, int cellW, int cellH,
     int left, int top, double maxShiftFrac, double ignorarBordasFrac, double shiftYFrac) {
   final w = bmp.width;
   final h = bmp.height;
-  final targetW = w < 800 ? w : 800;
+  final targetW = w < 1200 ? w : 1200;
   final targetH = (h * targetW / w).round().clamp(1, 100000);
   final small = (targetW < w) ? img.copyResize(bmp, width: targetW, height: targetH) : bmp;
   final sw = small.width;
@@ -638,10 +638,10 @@ Future<img.Image?> _rasterizeCard(
     int scale = (w / pw).ceil();
     final ch = (h / ph).ceil();
     if (ch < scale) scale = ch;
-    if (scale > 4) scale = 4;
+    if (scale > 6) scale = 6;
     if (scale < 1) scale = 1;
     int renderWidth = (pw * scale).round();
-    if (renderWidth > 7200) renderWidth = 7200;
+    if (renderWidth > 10000) renderWidth = 10000;
     final renderHeight = (ph * (renderWidth / pw)).round();
     final pi = await page.render(width: renderWidth, height: renderHeight);
     final raster = img.Image.fromBytes(

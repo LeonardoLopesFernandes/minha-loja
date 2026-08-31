@@ -667,13 +667,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
             ),
           ],
         ),
-        if (_loading)
-          const Positioned.fill(
-            child: ColoredBox(
-              color: Color(0x33000000),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          ),
+        ),
         Positioned(
           right: 24,
           bottom: 24,
