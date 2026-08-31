@@ -667,7 +667,6 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
             ),
           ],
         ),
-        ),
         Positioned(
           right: 24,
           bottom: 24,

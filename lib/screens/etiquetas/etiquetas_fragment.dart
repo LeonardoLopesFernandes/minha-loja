@@ -535,7 +535,6 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
             ),
           ],
         ),
-        ),
         Positioned(
           right: 24,
           bottom: 24,
