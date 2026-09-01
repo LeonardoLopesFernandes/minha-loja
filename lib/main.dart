@@ -49,7 +49,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'Minha Loja',
+      title: 'Minha Loja Oficial',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       initialRoute:

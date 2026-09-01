@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="minhaloja"
+        android:label="Minha Loja Oficial"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- Impeller desligado: crashes nativos de GPU com texturas grandes
