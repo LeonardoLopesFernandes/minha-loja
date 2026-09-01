@@ -249,9 +249,9 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     }
   }
 
-  /// Calcula as dimensões do canvas A4 em pixels (1200 DPI) para impressão,
+  /// Calcula as dimensões do canvas A4 em pixels para impressão,
   /// espelhando o gerarPdfMultiArquivo do MLoja.
-  List<int> _a4CanvasDimensions() {
+  List<int> _a4CanvasDimensions(int dpi) {
     const a4W = 595;
     const a4H = 842;
     const margin = 14.0;
@@ -259,7 +259,6 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     final isLandscape = s == '2X1' || s == '6X1';
     final pageW = isLandscape ? a4H : a4W;
     final pageH = isLandscape ? a4W : a4H;
-    const dpi = 1200.0;
     final dpiScale = dpi / 72.0;
     final usableW = pageW - margin * 2;
     final usableH = pageH - margin * 2;
@@ -269,18 +268,29 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   Future<void> _enviarViaSocket(List<PapeletaPrintingData> toSend) async {
     setState(() => _sending = true);
     try {
-      final a4Canvas = _a4CanvasDimensions();
-      final pages = await buildCompositePages(
-        api: api,
-        items: toSend,
-        size: _size,
-        modoVencimentos: _modoVencimentos,
-        validades: _validades(),
-        semOverlay: _semOverlay,
-        previewScale: 1.0,
-        targetCanvasW: a4Canvas[0],
-        targetCanvasH: a4Canvas[1],
-      );
+      // Impressão: 1200 → 600 → 300 (igual MLoja).
+      const dpis = [1200, 600, 300];
+      List<Uint8List>? pages;
+      for (final dpi in dpis) {
+        try {
+          final a4Canvas = _a4CanvasDimensions(dpi);
+          pages = await buildCompositePages(
+            api: api,
+            items: toSend,
+            size: _size,
+            modoVencimentos: _modoVencimentos,
+            validades: _validades(),
+            semOverlay: _semOverlay,
+            previewScale: 1.0,
+            targetCanvasW: a4Canvas[0],
+            targetCanvasH: a4Canvas[1],
+          );
+          break;
+        } catch (e) {
+          LogHelper.e('ModeloEditavel: socket fallback DPI $dpi', e);
+        }
+      }
+      if (pages == null) throw Exception('Falha ao gerar páginas');
       final pdfBytes = await _gerarPdfBytes(_comCopias(pages), _size);
       final socket = await Socket.connect(_kPrinterIp, _kPrinterPort,
           timeout: const Duration(seconds: 5));
@@ -307,18 +317,29 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
     }
     setState(() => _gerando = true);
     try {
-      final a4Canvas = _a4CanvasDimensions();
-      final pages = await buildCompositePages(
-        api: api,
-        items: toSend,
-        size: _size,
-        modoVencimentos: _modoVencimentos,
-        validades: _validades(),
-        semOverlay: _semOverlay,
-        previewScale: 1.0,
-        targetCanvasW: a4Canvas[0],
-        targetCanvasH: a4Canvas[1],
-      );
+      // Compartilhar: 300 → 600 → 1200 (começa leve pra evitar OOM, igual MLoja).
+      const dpis = [300, 600, 1200];
+      List<Uint8List>? pages;
+      for (final dpi in dpis) {
+        try {
+          final a4Canvas = _a4CanvasDimensions(dpi);
+          pages = await buildCompositePages(
+            api: api,
+            items: toSend,
+            size: _size,
+            modoVencimentos: _modoVencimentos,
+            validades: _validades(),
+            semOverlay: _semOverlay,
+            previewScale: 1.0,
+            targetCanvasW: a4Canvas[0],
+            targetCanvasH: a4Canvas[1],
+          );
+          break;
+        } catch (e) {
+          LogHelper.e('ModeloEditavel: share fallback DPI $dpi', e);
+        }
+      }
+      if (pages == null) throw Exception('Falha ao gerar páginas');
       final pdfBytes = await _gerarPdfBytes(_comCopias(pages), _size);
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/papeletas.pdf');
