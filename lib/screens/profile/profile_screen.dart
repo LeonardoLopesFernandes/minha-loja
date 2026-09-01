@@ -15,6 +15,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String get _nome => _session.getUserName() ?? 'Usuário';
   String get _email => _session.getUserEmail() ?? 'email@exemplo.com';
+  String get _loja => _session.getUserStore();
 
   void _confirmarSaida() {
     showDialog<bool>(
@@ -97,6 +98,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _email,
                       style: const TextStyle(
                         fontSize: 14,
+                        color: AppColors.gray900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(width: 60, height: 1, color: AppColors.cardBorder),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Loja $_loja',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                         color: AppColors.gray900,
                       ),
                     ),

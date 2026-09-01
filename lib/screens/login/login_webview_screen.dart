@@ -160,32 +160,58 @@ class _LoginWebViewScreenState extends State<LoginWebViewScreen> {
     _saved = true;
     _injectTimer?.cancel();
     _timeoutTimer?.cancel();
-    _session.saveToken(token);
 
-    String email = _email.isNotEmpty ? _email : '';
-    String nome = '';
-
-    // Tenta extrair email/nome do payload JWT
+    // Decodifica claims do JWT
+    Map<String, dynamic>? claims;
     try {
       final parts = token.split('.');
       if (parts.length == 3) {
-        final payload = parts[1];
-        final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
-        final padded = normalized + ('=' * (4 - normalized.length % 4));
-        final decoded = String.fromCharCodes(base64.decode(padded));
-        final Map<String, dynamic> data = jsonDecode(decoded);
-        if (email.isEmpty) email = data['email'] ?? data['preferred_username'] ?? data['upn'] ?? '';
-        nome = data['name'] ?? data['given_name'] ?? '';
+        var p = parts[1];
+        p = p.padRight(p.length + (4 - p.length % 4) % 4, '=');
+        final j = jsonDecode(utf8.decode(base64Url.decode(p)));
+        if (j is Map) claims = Map<String, dynamic>.from(j);
       }
     } catch (_) {}
+
+    // Salva token com expiry do JWT (exp)
+    _session.saveTokenWithExpiry(token,
+        expiryEpochSeconds: claims?['exp'] is int ? claims!['exp'] as int : null);
+
+    // Suporta JWT com claims aninhados em "user" (minhaloja/trocafacil)
+    // e flat (Microsoft OAuth padrão).
+    final user = claims?['user'] is Map
+        ? Map<String, dynamic>.from(claims!['user'])
+        : null;
+
+    String email = (user?['email'] ??
+            claims?['email'] ??
+            claims?['preferred_username'] ??
+            claims?['upn'])
+        ?.toString() ??
+        (_email.isNotEmpty ? _email : '');
+
+    String nome = (user?['nome'] ??
+            user?['name'] ??
+            claims?['name'] ??
+            claims?['given_name'])
+        ?.toString() ??
+        '';
+
+    final stores = user?['stores'] ?? claims?['stores'];
+    final loja = user?['loja']?.toString() ??
+        claims?['loja']?.toString() ??
+        (stores is List && stores.isNotEmpty ? stores.first.toString() : null);
 
     if (email.isEmpty) email = 'usuario@americanas.io';
     if (nome.isEmpty) {
       nome = email.split('@').first.replaceAll('.', ' ').replaceAll('_', ' ');
-      nome = nome.split(' ').map((w) => w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : w).join(' ');
+      nome = nome
+          .split(' ')
+          .map((w) => w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : w)
+          .join(' ');
     }
 
-    _session.saveUserInfo(email, nome, 'L291');
+    _session.saveUserInfo(email, nome, loja ?? _session.getUserStore());
     if (mounted) {
       ToastUtils.showSuccess(context, 'Login realizado com sucesso');
       Navigator.pushReplacementNamed(context, '/main');

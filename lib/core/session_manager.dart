@@ -29,6 +29,21 @@ class SessionManager {
     _prefs!.setBool(_keyRememberLogin, true);
   }
 
+  void saveTokenWithExpiry(String token, {int? expiryEpochSeconds}) {
+    final expiry = (expiryEpochSeconds != null
+            ? expiryEpochSeconds * 1000
+            : DateTime.now().millisecondsSinceEpoch +
+                (tokenExpiryDays * 24 * 60 * 60 * 1000))
+        .clamp(
+            DateTime.now().millisecondsSinceEpoch,
+            DateTime.now()
+                .add(const Duration(days: 365))
+                .millisecondsSinceEpoch);
+    _prefs!.setString(_keyBearerToken, token);
+    _prefs!.setInt(_keyTokenExpiry, expiry);
+    _prefs!.setBool(_keyRememberLogin, true);
+  }
+
   String? getToken() {
     final token = _prefs!.getString(_keyBearerToken);
     if (token == null || token.isEmpty) return null;
