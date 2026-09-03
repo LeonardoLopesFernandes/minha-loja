@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/session_manager.dart';
 import 'core/lista_store.dart';
@@ -52,6 +53,15 @@ class MyApp extends StatelessWidget {
       title: 'Minha Loja Oficial',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      locale: const Locale('pt', 'BR'),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('pt', 'BR'),
+      ],
       initialRoute:
           SessionManager.instance?.isLoggedIn() == true ? '/main' : '/login',
       routes: {
