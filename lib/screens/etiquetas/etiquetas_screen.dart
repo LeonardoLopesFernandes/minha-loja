@@ -258,11 +258,11 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
         title: const Text('Selecione os departamentos'),
         content: SizedBox(
           width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              StatefulBuilder(
-                builder: (c, setInner) => CheckboxListTile(
+          child: StatefulBuilder(
+            builder: (c, setInner) => ListView(
+              shrinkWrap: true,
+              children: [
+                CheckboxListTile(
                   title: const Text('Todos os departamentos'),
                   value: temp.length == _departments.length,
                   onChanged: (v) {
@@ -275,12 +275,10 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
                     });
                   },
                 ),
-              ),
-              const Divider(),
-              ..._departments.map((d) {
-                final id = d.id;
-                return StatefulBuilder(
-                  builder: (c, setInner) => CheckboxListTile(
+                const Divider(),
+                ..._departments.map((d) {
+                  final id = d.id;
+                  return CheckboxListTile(
                     title: Text('$id - ${d.label}'),
                     value: temp.contains(id),
                     onChanged: (v) {
@@ -288,10 +286,10 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
                         if (v == true) temp.add(id); else temp.remove(id);
                       });
                     },
-                  ),
-                );
-              }),
-            ],
+                  );
+                }),
+              ],
+            ),
           ),
         ),
         actions: [

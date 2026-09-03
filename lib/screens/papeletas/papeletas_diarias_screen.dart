@@ -259,11 +259,11 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
         title: const Text('Selecione os departamentos'),
         content: SizedBox(
           width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              StatefulBuilder(
-                builder: (c, setInner) => CheckboxListTile(
+          child: StatefulBuilder(
+            builder: (c, setInner) => ListView(
+              shrinkWrap: true,
+              children: [
+                CheckboxListTile(
                   title: const Text('Todos os departamentos'),
                   value: temp.length == _departments.length,
                   onChanged: (v) => setInner(() {
@@ -274,20 +274,18 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
                     }
                   }),
                 ),
-              ),
-              const Divider(),
-              ..._departments.map((d) {
-                return StatefulBuilder(
-                  builder: (c, setInner) => CheckboxListTile(
+                const Divider(),
+                ..._departments.map((d) {
+                  return CheckboxListTile(
                     title: Text('${d.id} - ${d.label}'),
                     value: temp.contains(d.id),
                     onChanged: (v) => setInner(() {
                       if (v == true) temp.add(d.id); else temp.remove(d.id);
                     }),
-                  ),
-                );
-              }),
-            ],
+                  );
+                }),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -644,21 +642,11 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
       String? hint,
       required List<DropdownMenuItem<dynamic>> items,
       required void Function(dynamic) onChanged}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade400),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<dynamic>(
-          isExpanded: true,
-          value: value,
-          hint: hint != null ? Text(hint) : null,
-          items: items,
-          onChanged: onChanged,
-        ),
-      ),
+    return _DropdownWidget(
+      value: value,
+      hint: hint,
+      items: items,
+      onChanged: onChanged,
     );
   }
 
@@ -685,5 +673,56 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+}
+
+class _DropdownWidget extends StatefulWidget {
+  final dynamic value;
+  final String? hint;
+  final List<DropdownMenuItem<dynamic>> items;
+  final void Function(dynamic) onChanged;
+  const _DropdownWidget({
+    required this.value,
+    this.hint,
+    required this.items,
+    required this.onChanged,
+  });
+  @override
+  State<_DropdownWidget> createState() => _DropdownWidgetState();
+}
+
+class _DropdownWidgetState extends State<_DropdownWidget> {
+  bool _isOpen = false;
+  @override
+  Widget build(BuildContext context) {
+    final red = const Color(0xFFD32F2F);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: _isOpen ? red : Colors.white,
+        border: Border.all(color: _isOpen ? red : Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<dynamic>(
+          isExpanded: true,
+          value: widget.value,
+          hint: widget.hint != null
+              ? Text(widget.hint!, style: TextStyle(color: _isOpen ? Colors.white : Colors.black))
+              : null,
+          dropdownColor: Colors.white,
+          style: TextStyle(
+            color: _isOpen ? Colors.white : Colors.black,
+            fontSize: 14,
+          ),
+          iconEnabledColor: _isOpen ? Colors.white : Colors.black,
+          items: widget.items,
+          onChanged: (v) {
+            widget.onChanged(v);
+          },
+          onTap: () => setState(() => _isOpen = !_isOpen),
+        ),
+      ),
+    );
   }
 }

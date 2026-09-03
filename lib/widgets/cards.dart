@@ -452,13 +452,18 @@ Widget _qtyBox(TextEditingController c, ValueChanged<int> onChange) {
         textAlign: TextAlign.center,
         textAlignVertical: TextAlignVertical.center,
         keyboardType: TextInputType.number,
+        maxLength: 2,
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
         decoration: const InputDecoration(
           border: InputBorder.none,
           isCollapsed: true,
           contentPadding: EdgeInsets.zero,
+          counterText: '',
         ),
-        onChanged: (v) => onChange(int.tryParse(v) ?? 1),
+        onChanged: (v) {
+          final n = int.tryParse(v) ?? 1;
+          onChange(n.clamp(1, 99));
+        },
       ),
     ),
   );
@@ -586,14 +591,19 @@ class _PriceTagCardState extends State<PriceTagCard> {
                       textAlign: TextAlign.center,
                       textAlignVertical: TextAlignVertical.center,
                       keyboardType: TextInputType.number,
+                      maxLength: 2,
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.bold, color: _descDark),
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         isCollapsed: true,
                         contentPadding: EdgeInsets.zero,
+                        counterText: '',
                       ),
-                      onChanged: (v) => widget.onChangedQuantity(int.tryParse(v) ?? 1),
+                      onChanged: (v) {
+                        final n = int.tryParse(v) ?? 1;
+                        widget.onChangedQuantity(n.clamp(1, 99));
+                      },
                     ),
                   ),
                 ),
@@ -798,14 +808,19 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
                       textAlign: TextAlign.center,
                       textAlignVertical: TextAlignVertical.center,
                       keyboardType: TextInputType.number,
+                      maxLength: 2,
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.bold, color: _descDark),
                       decoration: const InputDecoration(
                         border: InputBorder.none,
                         isCollapsed: true,
                         contentPadding: EdgeInsets.zero,
+                        counterText: '',
                       ),
-                      onChanged: (v) => widget.onChangedQuantity(int.tryParse(v) ?? 1),
+                      onChanged: (v) {
+                        final n = int.tryParse(v) ?? 1;
+                        widget.onChangedQuantity(n.clamp(1, 99));
+                      },
                     ),
                   ),
                 ),

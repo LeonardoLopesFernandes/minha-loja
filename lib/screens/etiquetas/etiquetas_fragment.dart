@@ -303,24 +303,10 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
     required List<String> items,
     required ValueChanged<String?> onChanged,
   }) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          value: value,
-          items: items
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
+    return _SpinnerBoxWidget(
+      value: value,
+      items: items,
+      onChanged: onChanged,
     );
   }
 
@@ -559,6 +545,55 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SpinnerBoxWidget extends StatefulWidget {
+  final String value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+  const _SpinnerBoxWidget({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+  @override
+  State<_SpinnerBoxWidget> createState() => _SpinnerBoxWidgetState();
+}
+
+class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
+  bool _isOpen = false;
+  @override
+  Widget build(BuildContext context) {
+    final red = const Color(0xFFD32F2F);
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: _isOpen ? red : Colors.white,
+        border: Border.all(color: _isOpen ? red : const Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isExpanded: true,
+          value: widget.value,
+          dropdownColor: Colors.white,
+          style: TextStyle(
+            color: _isOpen ? Colors.white : Colors.black,
+            fontSize: 14,
+          ),
+          iconEnabledColor: _isOpen ? Colors.white : Colors.black,
+          items: widget.items
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .toList(),
+          onChanged: (v) {
+            widget.onChanged(v);
+          },
+          onTap: () => setState(() => _isOpen = !_isOpen),
+        ),
+      ),
     );
   }
 }
