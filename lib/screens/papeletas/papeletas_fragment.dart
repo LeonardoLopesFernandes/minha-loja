@@ -291,7 +291,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
     final lista = <PapeletaPrintingData>[];
     for (final item in _items) {
       final ehComum = _isItemComum(item);
-      if (!_usarMisto) {
+      if (!_usarMisto && !_usarVencimentos) {
         if (_tipo == 'Comum' && (!ehComum || !_isComumElegivel(item))) continue;
         if (_tipo == 'Promocional' && ehComum) continue;
       }
