@@ -666,6 +666,13 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
   }
 
   Widget _buildItemFormCard(int i) {
+    final d = _items[i];
+    final hasPromo = d.promotionPrice != null && d.promotionPrice! > 0;
+    final hasTake = d.takeAndWinQuantity != null && d.takeAndWinQuantity! > 0;
+    final hasInst = d.installmentQuantity != null && d.installmentQuantity! > 0;
+    final ehComum = !hasPromo && !hasTake && !hasInst;
+    final tipoLabel = ehComum ? 'Comum' : 'Promocional';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       elevation: 2,
@@ -684,7 +691,7 @@ class _ModeloEditavelScreenState extends State<ModeloEditavelScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'ITEM ${i + 1}',
+                  'ITEM ${i + 1} - $tipoLabel',
                   style: const TextStyle(
                     color: _kRed,
                     fontWeight: FontWeight.bold,
