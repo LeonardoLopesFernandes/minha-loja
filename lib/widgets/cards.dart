@@ -434,6 +434,7 @@ Widget _qtyBox(TextEditingController c, ValueChanged<int> onChange) {
         border: Border.all(color: _red, width: 1),
         borderRadius: BorderRadius.circular(8),
       ),
+      alignment: Alignment.center,
       child: TextField(
         controller: c,
         textAlign: TextAlign.center,
@@ -561,6 +562,7 @@ class _PriceTagCardState extends State<PriceTagCard> {
                       color: _qtyGray,
                       borderRadius: BorderRadius.circular(6),
                     ),
+                    alignment: Alignment.center,
                     child: TextField(
                       controller: _qty,
                       textAlign: TextAlign.center,
@@ -764,6 +766,7 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
                       color: _qtyGray,
                       borderRadius: BorderRadius.circular(6),
                     ),
+                    alignment: Alignment.center,
                     child: TextField(
                       controller: _qty,
                       textAlign: TextAlign.center,
