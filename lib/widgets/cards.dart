@@ -70,6 +70,14 @@ class _EtiquetaCardState extends State<EtiquetaCard> {
   }
 
   @override
+  void didUpdateWidget(covariant EtiquetaCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tag.quantity != widget.tag.quantity) {
+      _qty.text = widget.tag.quantity.toString();
+    }
+  }
+
+  @override
   void dispose() {
     _qty.dispose();
     super.dispose();
@@ -254,6 +262,14 @@ class _PapeletaCardState extends State<PapeletaCard> {
   void initState() {
     super.initState();
     _qty = TextEditingController(text: widget.item.quantity.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant PapeletaCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.quantity != widget.item.quantity) {
+      _qty.text = widget.item.quantity.toString();
+    }
   }
 
   @override
@@ -477,6 +493,14 @@ class _PriceTagCardState extends State<PriceTagCard> {
   }
 
   @override
+  void didUpdateWidget(covariant PriceTagCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tag.quantity != widget.tag.quantity) {
+      _qty.text = widget.tag.quantity.toString();
+    }
+  }
+
+  @override
   void dispose() {
     _qty.dispose();
     super.dispose();
@@ -675,6 +699,14 @@ class _PapeletaDiariaCardState extends State<PapeletaDiariaCard> {
   void initState() {
     super.initState();
     _qty = TextEditingController(text: widget.item.quantity.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant PapeletaDiariaCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.quantity != widget.item.quantity) {
+      _qty.text = widget.item.quantity.toString();
+    }
   }
 
   @override
