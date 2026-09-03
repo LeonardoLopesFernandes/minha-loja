@@ -175,6 +175,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
           added++;
         }
       }
+      setState(() {});
       await _persist();
       ToastUtils.showSuccess(
           context, '$added adicionado(s) | $incremented incrementado(s)');

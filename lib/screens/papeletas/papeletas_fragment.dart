@@ -204,6 +204,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
           }
         }
       }
+      setState(() {});
       if (!mounted) return;
       if (added == 0 && incremented == 0) {
         ToastUtils.showInfo(context, 'Nenhuma papeleta encontrada');
