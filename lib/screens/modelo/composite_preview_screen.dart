@@ -406,7 +406,7 @@ Future<List<Uint8List>> buildCompositePages({
           try {
             final layer = await _camadaTextosVencimento(
                 halfW, halfH, vTxt.trim(),
-                topFrac: ehComum ? 0.05 : (multiCell ? 0.28 : 0.25));
+                topFrac: ehComum ? 0.0 : (multiCell ? 0.28 : 0.25));
             img.compositeImage(base, layer,
                 dstX: left, dstY: top, dstW: halfW, dstH: halfH);
           } catch (e) {
