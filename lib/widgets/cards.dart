@@ -72,9 +72,7 @@ class _EtiquetaCardState extends State<EtiquetaCard> {
   @override
   void didUpdateWidget(covariant EtiquetaCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tag.quantity != widget.tag.quantity) {
-      _qty.text = widget.tag.quantity.toString();
-    }
+    _qty.text = widget.tag.quantity.toString();
   }
 
   @override
@@ -267,9 +265,7 @@ class _PapeletaCardState extends State<PapeletaCard> {
   @override
   void didUpdateWidget(covariant PapeletaCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.quantity != widget.item.quantity) {
-      _qty.text = widget.item.quantity.toString();
-    }
+    _qty.text = widget.item.quantity.toString();
   }
 
   @override
@@ -495,9 +491,7 @@ class _PriceTagCardState extends State<PriceTagCard> {
   @override
   void didUpdateWidget(covariant PriceTagCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tag.quantity != widget.tag.quantity) {
-      _qty.text = widget.tag.quantity.toString();
-    }
+    _qty.text = widget.tag.quantity.toString();
   }
 
   @override

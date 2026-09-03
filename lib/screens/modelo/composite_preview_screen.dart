@@ -398,15 +398,15 @@ Future<List<Uint8List>> buildCompositePages({
         _centralizarConteudo(base, raster, halfW, halfH, left, top, maxShift,
             ignorar, shiftY);
         // Validade/rodapé por cima, centrados na célula.
-        // Em tamanhos multi-célula (2x1/4x1/6x1) o conteúdo assenta mais
-        // baixo, então o texto desce um pouco também; 1x1 fica como validado.
+        // Comum: conteúdo mais baixo, sobe para 0.20.
+        // Promocional: mantém 0.28 multi-célula / 0.25 single.
         final multiCell = cols * rows > 1;
         final vTxt = validades.length > idx ? validades[idx] : '';
         if (vTxt.trim().isNotEmpty) {
           try {
             final layer = await _camadaTextosVencimento(
                 halfW, halfH, vTxt.trim(),
-                topFrac: multiCell ? 0.28 : 0.25);
+                topFrac: ehComum ? 0.20 : (multiCell ? 0.28 : 0.25));
             img.compositeImage(base, layer,
                 dstX: left, dstY: top, dstW: halfW, dstH: halfH);
           } catch (e) {
@@ -558,9 +558,8 @@ Future<img.Image> _camadaTextosVencimento(int w, int h, String validade,
     tp.paint(canvas, Offset((w - tp.width) / 2, y - tp.height / 2));
   }
 
-  // Promocional: topFrac padrão (0.25, posição validada pelo usuário).
-  // Comum: o conteúdo da API é mais baixo no card, então o texto desce
-  // (0.36), dentro da faixa que o MLoja usa (0.28–0.45).
+  // Comum: sobe para 0.20 (conteúdo da API é mais baixo no card).
+  // Promocional: 0.28 multi-célula / 0.25 single (posição validada).
   draw('VAL.: ${txt.toUpperCase()}', h * topFrac, w / 18);
   draw('PRÓXIMO DA VALIDADE. CONSUMO RÁPIDO', h * 0.88,
       (w / 32).clamp(8, 26).toDouble());
