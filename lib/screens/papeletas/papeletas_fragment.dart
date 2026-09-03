@@ -194,7 +194,7 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
       int incremented = 0;
       for (final r in results) {
         for (final it in r.items) {
-          final idx = _items.indexWhere((e) => e.ean == it.ean);
+          final idx = _items.indexWhere((e) => e.id == it.id);
           if (idx >= 0) {
             _items[idx].quantity += 1;
             incremented++;
