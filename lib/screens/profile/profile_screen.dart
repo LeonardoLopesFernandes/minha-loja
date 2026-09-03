@@ -45,15 +45,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const red = Color(0xFFE5093A);
     return Scaffold(
-      backgroundColor: AppColors.gray100,
+      backgroundColor: red,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: red,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Perfil', style: TextStyle(color: Colors.white)),
+        title: const Text('Perfil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -65,62 +67,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(48),
                 ),
                 child: const Center(
-                  child: Icon(Icons.person, color: Colors.white, size: 48),
+                  child: Icon(Icons.person, color: red, size: 48),
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: AppColors.cardBorder),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _nome,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.gray900,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _nome,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: red,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _email,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.gray900,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _email,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: red,
                     ),
-                    const SizedBox(height: 12),
-                    Container(width: 60, height: 1, color: AppColors.cardBorder),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Loja $_loja',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.gray900,
-                      ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(width: 60, height: 1, color: red.withOpacity(0.3)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Loja $_loja',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: red,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             const Spacer(),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+                backgroundColor: Colors.white,
+                foregroundColor: red,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

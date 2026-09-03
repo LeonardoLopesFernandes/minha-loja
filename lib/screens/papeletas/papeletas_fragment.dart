@@ -191,19 +191,25 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
             startDate: _startDate),
       ]);
       int added = 0;
+      int incremented = 0;
       for (final r in results) {
         for (final it in r.items) {
-          if (!_items.any((e) => e.id == it.id)) {
+          final idx = _items.indexWhere((e) => e.ean == it.ean);
+          if (idx >= 0) {
+            _items[idx].quantity += 1;
+            incremented++;
+          } else {
             _items.add(it);
             added++;
           }
         }
       }
       if (!mounted) return;
-      if (added == 0) {
+      if (added == 0 && incremented == 0) {
         ToastUtils.showInfo(context, 'Nenhuma papeleta encontrada');
       } else {
-        ToastUtils.showSuccess(context, '$added papeleta(s) adicionada(s)');
+        ToastUtils.showSuccess(
+            context, '$added adicionado(s) | $incremented incrementado(s)');
       }
       await _persist();
     } on ApiException catch (e) {
