@@ -85,6 +85,10 @@ class _EtiquetasScreenState extends State<EtiquetasScreen>
           .where((t) => (t.printerId).toUpperCase().contains('ZEBRA'))
           .toList();
       _departments = filters.departments.toList()
+        ..removeWhere((d) {
+          final id = int.tryParse(d.id) ?? 0;
+          return id >= 68 && id <= 98;
+        })
         ..sort((a, b) {
           final na = int.tryParse(a.id) ?? 0;
           final nb = int.tryParse(b.id) ?? 0;

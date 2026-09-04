@@ -555,7 +555,8 @@ Future<img.Image> _camadaTextosVencimento(int w, int h, String validade,
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
     )..layout(minWidth: 0, maxWidth: w.toDouble());
-    tp.paint(canvas, Offset((w - tp.width) / 2, y - tp.height / 2));
+    final drawY = y < tp.height ? 0.0 : y - tp.height / 2;
+    tp.paint(canvas, Offset((w - tp.width) / 2, drawY));
   }
 
   // Comum: sobe para 0.20 (conteúdo da API é mais baixo no card).

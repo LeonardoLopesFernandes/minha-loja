@@ -67,6 +67,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
   ];
   int _statusPos = 0;
   String _selectedStatus = Constants.statusAll;
+  int _selectedSpinnerIndex = -1; // Índice do spinner selecionado (-1 = nenhum)
 
   @override
   void initState() {
@@ -109,6 +110,10 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
 
       final deptFilters = await _api.getPriceTagFilters(_storeId, _currentDate);
       _departments = deptFilters.departments.toList()
+        ..removeWhere((d) {
+          final id = int.tryParse(d.id) ?? 0;
+          return id >= 68 && id <= 98;
+        })
         ..sort((a, b) {
           final na = int.tryParse(a.id) ?? 0;
           final nb = int.tryParse(b.id) ?? 0;
@@ -516,6 +521,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
             children: [
               Expanded(
                 child: _dropdown(
+                  index: 0,
                   value: _movementPos,
                   items: _movementOptions
                       .asMap()
@@ -536,6 +542,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
               const SizedBox(width: 10),
               Expanded(
                 child: _dropdown(
+                  index: 1,
                   value: _typePos,
                   items: _typeOptions
                       .asMap()
@@ -561,6 +568,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
             children: [
               Expanded(
                 child: _dropdown(
+                  index: 2,
                   value: _sizes.contains(_selectedSize) ? _selectedSize : null,
                   hint: 'Tamanho',
                   items: _sizes
@@ -574,6 +582,7 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
               const SizedBox(width: 10),
               Expanded(
                 child: _dropdown(
+                  index: 3,
                   value: _statusPos,
                   items: _statusOptions
                       .asMap()
@@ -638,14 +647,18 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
   }
 
   Widget _dropdown(
-      {dynamic value,
+      {required int index,
+      dynamic value,
       String? hint,
       required List<DropdownMenuItem<dynamic>> items,
       required void Function(dynamic) onChanged}) {
     return _DropdownWidget(
+      index: index,
       value: value,
       hint: hint,
       items: items,
+      isSelected: _selectedSpinnerIndex == index,
+      onSelected: (idx) => setState(() => _selectedSpinnerIndex = idx),
       onChanged: onChanged,
     );
   }
@@ -677,14 +690,20 @@ class _PapeletasDiariasScreenState extends State<PapeletasDiariasScreen>
 }
 
 class _DropdownWidget extends StatefulWidget {
+  final int index;
   final dynamic value;
   final String? hint;
   final List<DropdownMenuItem<dynamic>> items;
+  final bool isSelected;
+  final ValueChanged<int> onSelected;
   final void Function(dynamic) onChanged;
   const _DropdownWidget({
+    required this.index,
     required this.value,
     this.hint,
     required this.items,
+    required this.isSelected,
+    required this.onSelected,
     required this.onChanged,
   });
   @override
@@ -692,15 +711,15 @@ class _DropdownWidget extends StatefulWidget {
 }
 
 class _DropdownWidgetState extends State<_DropdownWidget> {
-  bool _isOpen = false;
   @override
   Widget build(BuildContext context) {
     final red = const Color(0xFFD32F2F);
+    final isActive = widget.isSelected;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: _isOpen ? red : Colors.white,
-        border: Border.all(color: _isOpen ? red : Colors.grey.shade400),
+        color: isActive ? red : Colors.white,
+        border: Border.all(color: isActive ? red : Colors.grey.shade400),
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButtonHideUnderline(
@@ -708,19 +727,19 @@ class _DropdownWidgetState extends State<_DropdownWidget> {
           isExpanded: true,
           value: widget.value,
           hint: widget.hint != null
-              ? Text(widget.hint!, style: TextStyle(color: _isOpen ? Colors.white : Colors.black))
+              ? Text(widget.hint!, style: TextStyle(color: isActive ? Colors.white : Colors.black))
               : null,
           dropdownColor: Colors.white,
           style: TextStyle(
-            color: _isOpen ? Colors.white : Colors.black,
+            color: isActive ? Colors.white : Colors.black,
             fontSize: 14,
           ),
-          iconEnabledColor: _isOpen ? Colors.white : Colors.black,
+          iconEnabledColor: isActive ? Colors.white : Colors.black,
           items: widget.items,
           onChanged: (v) {
             widget.onChanged(v);
           },
-          onTap: () => setState(() => _isOpen = !_isOpen),
+          onTap: () => widget.onSelected(widget.index),
         ),
       ),
     );

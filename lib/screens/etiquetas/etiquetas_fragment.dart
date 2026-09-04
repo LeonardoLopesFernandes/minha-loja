@@ -81,6 +81,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
   String _eanHint = 'Digite o EAN';
   TextInputType _eanKeyboardType = TextInputType.number;
   String _printer = 'Zebra 1';
+  int _selectedSpinnerIndex = -1; // Índice do spinner selecionado (-1 = nenhum)
 
   String get _baseHint {
     switch (_buscaTipo) {
@@ -299,13 +300,17 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
   }
 
   Widget _spinnerBox({
+    required int index,
     required String value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
   }) {
     return _SpinnerBoxWidget(
+      index: index,
       value: value,
       items: items,
+      isSelected: _selectedSpinnerIndex == index,
+      onSelected: (idx) => setState(() => _selectedSpinnerIndex = idx),
       onChanged: onChanged,
     );
   }
@@ -319,6 +324,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
             children: [
               Expanded(
                 child: _spinnerBox(
+                  index: 0,
                   value: _printer,
                   items: const ['Zebra 1', 'Zebra 2'],
                   onChanged: (v) {
@@ -330,6 +336,7 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
               const SizedBox(width: 4),
               Expanded(
                 child: _spinnerBox(
+                  index: 1,
                   value: _buscaTipo,
                   items: const ['EAN', 'SAP', 'Descrição'],
                   onChanged: (v) {
@@ -550,12 +557,18 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
 }
 
 class _SpinnerBoxWidget extends StatefulWidget {
+  final int index;
   final String value;
   final List<String> items;
+  final bool isSelected;
+  final ValueChanged<int> onSelected;
   final ValueChanged<String?> onChanged;
   const _SpinnerBoxWidget({
+    required this.index,
     required this.value,
     required this.items,
+    required this.isSelected,
+    required this.onSelected,
     required this.onChanged,
   });
   @override
@@ -563,15 +576,15 @@ class _SpinnerBoxWidget extends StatefulWidget {
 }
 
 class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
-  bool _isOpen = false;
   @override
   Widget build(BuildContext context) {
     final red = const Color(0xFFD32F2F);
+    final isActive = widget.isSelected;
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: _isOpen ? red : Colors.white,
-        border: Border.all(color: _isOpen ? red : const Color(0xFFE0E0E0)),
+        color: isActive ? red : Colors.white,
+        border: Border.all(color: isActive ? red : const Color(0xFFE0E0E0)),
         borderRadius: BorderRadius.circular(6),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -581,17 +594,17 @@ class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
           value: widget.value,
           dropdownColor: Colors.white,
           style: TextStyle(
-            color: _isOpen ? Colors.white : Colors.black,
+            color: isActive ? Colors.white : Colors.black,
             fontSize: 14,
           ),
-          iconEnabledColor: _isOpen ? Colors.white : Colors.black,
+          iconEnabledColor: isActive ? Colors.white : Colors.black,
           items: widget.items
               .map((e) => DropdownMenuItem(value: e, child: Text(e)))
               .toList(),
           onChanged: (v) {
             widget.onChanged(v);
           },
-          onTap: () => setState(() => _isOpen = !_isOpen),
+          onTap: () => widget.onSelected(widget.index),
         ),
       ),
     );
