@@ -319,7 +319,7 @@ Future<List<Uint8List>> buildCompositePages({
         final comum = _ehComum(items[idx]);
         comums.add(comum ? 1 : 0);
         tops.add(
-            comum ? 0.23 : (multiCellN ? 0.28 : 0.25));
+            comum ? 0.25 : (multiCellN ? 0.28 : 0.25));
         vds.add(validades.length > idx ? validades[idx] : '');
         payload.add(pdfBytes[i] ?? Uint8List(0));
       }
@@ -406,7 +406,7 @@ Future<List<Uint8List>> buildCompositePages({
           try {
             final layer = await _camadaTextosVencimento(
                 halfW, halfH, vTxt.trim(),
-                topFrac: ehComum ? 0.23 : (multiCell ? 0.28 : 0.25));
+                topFrac: ehComum ? 0.25 : (multiCell ? 0.28 : 0.25));
             img.compositeImage(base, layer,
                 dstX: left, dstY: top, dstW: halfW, dstH: halfH);
           } catch (e) {
@@ -640,10 +640,10 @@ Future<img.Image?> _rasterizeCard(
     int scale = (w / pw).ceil();
     final ch = (h / ph).ceil();
     if (ch < scale) scale = ch;
-    if (scale > 6) scale = 6;
+    if (scale > 7) scale = 7;
     if (scale < 1) scale = 1;
     int renderWidth = (pw * scale).round();
-    if (renderWidth > 10000) renderWidth = 10000;
+    if (renderWidth > 11000) renderWidth = 11000;
     final renderHeight = (ph * (renderWidth / pw)).round();
     final pi = await page.render(width: renderWidth, height: renderHeight);
     final raster = img.Image.fromBytes(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:minhaloja/core/session_manager.dart';
-import 'package:minhaloja/core/theme.dart';
 import 'package:minhaloja/utils/log_helper.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -45,91 +44,193 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const red = Color(0xFFE5093A);
+    const brandRed = Color(0xFFDA1C2E);
+    const textSecondary = Color(0xFF5F6368);
+    const textPrimary = Color(0xFF1A1A1A);
+
     return Scaffold(
-      backgroundColor: red,
-      appBar: AppBar(
-        backgroundColor: red,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Perfil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
+      backgroundColor: brandRed,
+      body: SafeArea(
+        bottom: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(48),
-                ),
-                child: const Center(
-                  child: Icon(Icons.person, color: red, size: 48),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // App Bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 24, 18),
+              child: Row(
                 children: [
-                  Text(
-                    _nome,
-                    style: const TextStyle(
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 16),
+                  const Text(
+                    'Perfil',
+                    style: TextStyle(
+                      color: Colors.white,
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: red,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _email,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: red,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(width: 60, height: 1, color: red.withOpacity(0.3)),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Loja $_loja',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: red,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
               ),
             ),
-            const Spacer(),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: red,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+
+            // Conteúdo
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    // Avatar
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 4),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x33000000),
+                              blurRadius: 24,
+                              offset: Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.person, color: brandRed, size: 60),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // Card de informações
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x1F000000),
+                            blurRadius: 32,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          // Nome
+                          Text(
+                            _nome,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: brandRed,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Email
+                          Row(
+                            children: [
+                              const Icon(Icons.email_outlined, color: brandRed, size: 20),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  _email,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Loja
+                          Row(
+                            children: [
+                              const Icon(Icons.store_outlined, color: brandRed, size: 20),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  'Loja $_loja',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: textPrimary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Divisor
+                          Container(
+                            height: 1,
+                            color: const Color(0xFFE9EAEE),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Espaço
+                    const Spacer(),
+
+                    // Botão Sair
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 40),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: _confirmarSaida,
+                              borderRadius: BorderRadius.circular(14),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.logout, color: Colors.white, size: 18),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Sair da conta',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              onPressed: _confirmarSaida,
-              icon: const Icon(Icons.exit_to_app),
-              label: const Text(
-                'Sair da conta',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
           ],
