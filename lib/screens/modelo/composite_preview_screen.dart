@@ -319,7 +319,7 @@ Future<List<Uint8List>> buildCompositePages({
         final comum = _ehComum(items[idx]);
         comums.add(comum ? 1 : 0);
         tops.add(
-            comum ? (multiCellN ? 0.39 : 0.36) : (multiCellN ? 0.28 : 0.25));
+            comum ? 0.0 : (multiCellN ? 0.28 : 0.25));
         vds.add(validades.length > idx ? validades[idx] : '');
         payload.add(pdfBytes[i] ?? Uint8List(0));
       }

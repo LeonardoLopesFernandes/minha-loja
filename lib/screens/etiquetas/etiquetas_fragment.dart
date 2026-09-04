@@ -311,7 +311,10 @@ class _EtiquetasFragmentState extends State<EtiquetasFragment>
       items: items,
       isSelected: _selectedSpinnerIndex == index,
       onSelected: (idx) => setState(() => _selectedSpinnerIndex = idx),
-      onChanged: onChanged,
+      onChanged: (v) {
+        setState(() => _selectedSpinnerIndex = index);
+        onChanged(v);
+      },
     );
   }
 

@@ -441,7 +441,10 @@ class _PapeletasFragmentState extends State<PapeletasFragment>
       items: items,
       isSelected: _selectedSpinnerIndex == index,
       onSelected: (idx) => setState(() => _selectedSpinnerIndex = idx),
-      onChanged: onChanged,
+      onChanged: (v) {
+        setState(() => _selectedSpinnerIndex = index);
+        onChanged(v);
+      },
     );
   }
 
