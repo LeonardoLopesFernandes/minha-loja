@@ -733,11 +733,17 @@ class _DropdownWidgetState extends State<_DropdownWidget> {
               ? Text(widget.hint!, style: const TextStyle(color: Colors.black))
               : null,
           dropdownColor: Colors.white,
-          style: TextStyle(
-            color: isActive ? Colors.white : Colors.black,
-            fontSize: 14,
-          ),
+          style: const TextStyle(color: Colors.black, fontSize: 14),
           iconEnabledColor: isActive ? Colors.white : Colors.black,
+          selectedItemBuilder: (context) {
+            return widget.items.map((e) {
+              final label = e.child is Text ? (e.child as Text).data ?? '' : '';
+              return Text(label, style: TextStyle(
+                color: isActive ? Colors.white : Colors.black,
+                fontSize: 14,
+              ));
+            }).toList();
+          },
           items: widget.items
               .map((e) => DropdownMenuItem(
                     value: e.value,

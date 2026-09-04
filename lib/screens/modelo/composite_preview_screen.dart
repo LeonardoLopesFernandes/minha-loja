@@ -211,13 +211,21 @@ Future<List<Uint8List>> buildCompositePages({
 
   final overlayData =
       await rootBundle.load('assets/overlays/${s.toLowerCase()}.png');
-  final overlay = img.decodeImage(overlayData.buffer.asUint8List());
+  final overlayRaw = img.decodeImage(overlayData.buffer.asUint8List());
+  final overlay = overlayRaw != null
+      ? img.copyResize(overlayRaw, width: halfW * cols, height: halfH * rows,
+          interpolation: img.Interpolation.cubic)
+      : null;
 
   // Misto: overlay 1x1 para desenhar por célula (promo recebe, comum não).
   img.Image? overlay1x1;
   if (s != '1X1') {
     final ov1x1Data = await rootBundle.load('assets/overlays/1x1.png');
-    overlay1x1 = img.decodeImage(ov1x1Data.buffer.asUint8List());
+    final ov1x1Raw = img.decodeImage(ov1x1Data.buffer.asUint8List());
+    overlay1x1 = ov1x1Raw != null
+        ? img.copyResize(ov1x1Raw, width: halfW, height: halfH,
+            interpolation: img.Interpolation.cubic)
+        : null;
   }
 
   final gridCap = cols * rows;
