@@ -730,15 +730,21 @@ class _DropdownWidgetState extends State<_DropdownWidget> {
           isExpanded: true,
           value: widget.value,
           hint: widget.hint != null
-              ? Text(widget.hint!, style: TextStyle(color: isActive ? Colors.white : Colors.black))
+              ? Text(widget.hint!, style: const TextStyle(color: Colors.black))
               : null,
           dropdownColor: Colors.white,
-          style: TextStyle(
-            color: isActive ? Colors.white : Colors.black,
+          style: const TextStyle(
+            color: Colors.black,
             fontSize: 14,
           ),
           iconEnabledColor: isActive ? Colors.white : Colors.black,
-          items: widget.items,
+          items: widget.items
+              .map((e) => DropdownMenuItem(
+                    value: e.value,
+                    child: Text(e.child is Text ? (e.child as Text).data ?? '' : '',
+                        style: const TextStyle(color: Colors.black)),
+                  ))
+              .toList(),
           onChanged: (v) {
             widget.onChanged(v);
           },

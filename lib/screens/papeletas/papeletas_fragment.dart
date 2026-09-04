@@ -727,7 +727,7 @@ class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
       height: 48,
       decoration: BoxDecoration(
         color: isActive ? red : Colors.white,
-        border: Border.all(color: isActive ? red : const Color(0xFFE0E0E0)),
+        border: Border.all(color: isActive ? red : const Color(0xFFCCCCCC)),
         borderRadius: BorderRadius.circular(6),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -736,13 +736,16 @@ class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
           isExpanded: true,
           value: widget.value,
           dropdownColor: Colors.white,
-          style: TextStyle(
-            color: isActive ? Colors.white : Colors.black,
+          style: const TextStyle(
+            color: Colors.black,
             fontSize: 14,
           ),
           iconEnabledColor: isActive ? Colors.white : Colors.black,
           items: widget.items
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .map((e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(e, style: const TextStyle(color: Colors.black)),
+                  ))
               .toList(),
           onChanged: (v) {
             widget.onChanged(v);

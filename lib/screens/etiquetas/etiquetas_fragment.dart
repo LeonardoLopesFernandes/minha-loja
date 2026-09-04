@@ -596,13 +596,16 @@ class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
           isExpanded: true,
           value: widget.value,
           dropdownColor: Colors.white,
-          style: TextStyle(
-            color: isActive ? Colors.white : Colors.black,
+          style: const TextStyle(
+            color: Colors.black,
             fontSize: 14,
           ),
           iconEnabledColor: isActive ? Colors.white : Colors.black,
           items: widget.items
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .map((e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(e, style: const TextStyle(color: Colors.black)),
+                  ))
               .toList(),
           onChanged: (v) {
             widget.onChanged(v);
