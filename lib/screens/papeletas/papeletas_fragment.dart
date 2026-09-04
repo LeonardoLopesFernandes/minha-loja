@@ -736,8 +736,8 @@ class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
           isExpanded: true,
           value: widget.value,
           dropdownColor: Colors.white,
-          style: const TextStyle(
-            color: Colors.black,
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.black,
             fontSize: 14,
           ),
           iconEnabledColor: isActive ? Colors.white : Colors.black,

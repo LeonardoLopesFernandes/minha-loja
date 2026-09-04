@@ -319,7 +319,7 @@ Future<List<Uint8List>> buildCompositePages({
         final comum = _ehComum(items[idx]);
         comums.add(comum ? 1 : 0);
         tops.add(
-            comum ? 0.15 : (multiCellN ? 0.28 : 0.25));
+            comum ? 0.23 : (multiCellN ? 0.28 : 0.25));
         vds.add(validades.length > idx ? validades[idx] : '');
         payload.add(pdfBytes[i] ?? Uint8List(0));
       }
@@ -406,7 +406,7 @@ Future<List<Uint8List>> buildCompositePages({
           try {
             final layer = await _camadaTextosVencimento(
                 halfW, halfH, vTxt.trim(),
-                topFrac: ehComum ? 0.15 : (multiCell ? 0.28 : 0.25));
+                topFrac: ehComum ? 0.23 : (multiCell ? 0.28 : 0.25));
             img.compositeImage(base, layer,
                 dstX: left, dstY: top, dstW: halfW, dstH: halfH);
           } catch (e) {

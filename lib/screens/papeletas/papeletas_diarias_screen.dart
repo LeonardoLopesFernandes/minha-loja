@@ -733,8 +733,8 @@ class _DropdownWidgetState extends State<_DropdownWidget> {
               ? Text(widget.hint!, style: const TextStyle(color: Colors.black))
               : null,
           dropdownColor: Colors.white,
-          style: const TextStyle(
-            color: Colors.black,
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.black,
             fontSize: 14,
           ),
           iconEnabledColor: isActive ? Colors.white : Colors.black,
