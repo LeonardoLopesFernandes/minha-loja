@@ -211,21 +211,13 @@ Future<List<Uint8List>> buildCompositePages({
 
   final overlayData =
       await rootBundle.load('assets/overlays/${s.toLowerCase()}.png');
-  final overlayRaw = img.decodeImage(overlayData.buffer.asUint8List());
-  final overlay = overlayRaw != null
-      ? img.copyResize(overlayRaw, width: halfW * cols, height: halfH * rows,
-          interpolation: img.Interpolation.cubic)
-      : null;
+  final overlay = img.decodeImage(overlayData.buffer.asUint8List());
 
   // Misto: overlay 1x1 para desenhar por célula (promo recebe, comum não).
   img.Image? overlay1x1;
   if (s != '1X1') {
     final ov1x1Data = await rootBundle.load('assets/overlays/1x1.png');
-    final ov1x1Raw = img.decodeImage(ov1x1Data.buffer.asUint8List());
-    overlay1x1 = ov1x1Raw != null
-        ? img.copyResize(ov1x1Raw, width: halfW, height: halfH,
-            interpolation: img.Interpolation.cubic)
-        : null;
+    overlay1x1 = img.decodeImage(ov1x1Data.buffer.asUint8List());
   }
 
   final gridCap = cols * rows;
@@ -262,7 +254,9 @@ Future<List<Uint8List>> buildCompositePages({
         numChannels: 4, format: img.Format.uint8);
     // Misto: fundo branco + overlay 1x1 individual por célula (não full-page).
     if (!isMisto && !semOverlay && overlay != null) {
-      img.compositeImage(base, overlay, dstW: ovW, dstH: ovH);
+      final ovResized = img.copyResize(overlay, width: ovW, height: ovH,
+          interpolation: img.Interpolation.cubic);
+      img.compositeImage(base, ovResized, dstW: ovW, dstH: ovH);
     } else {
       img.fill(base, color: img.ColorRgb8(255, 255, 255));
     }
@@ -424,7 +418,9 @@ Future<List<Uint8List>> buildCompositePages({
       } else {
         // Multi/Misto: overlay por célula.
         if (isMisto && !ehComum && !semOverlay && overlay1x1 != null) {
-          img.compositeImage(base, overlay1x1, dstX: left, dstY: top, dstW: halfW, dstH: halfH);
+          final ov1x1Resized = img.copyResize(overlay1x1, width: halfW, height: halfH,
+              interpolation: img.Interpolation.cubic);
+          img.compositeImage(base, ov1x1Resized, dstX: left, dstY: top, dstW: halfW, dstH: halfH);
         } else if (!isMisto && ehComum && !semOverlay && overlay != null) {
           _fillCell(base, left, top, halfW, halfH);
         }
