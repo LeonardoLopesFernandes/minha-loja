@@ -738,10 +738,13 @@ class _DropdownWidgetState extends State<_DropdownWidget> {
           selectedItemBuilder: (context) {
             return widget.items.map((e) {
               final label = e.child is Text ? (e.child as Text).data ?? '' : '';
-              return Text(label, style: TextStyle(
-                color: isActive ? Colors.white : Colors.black,
-                fontSize: 14,
-              ));
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Text(label, style: TextStyle(
+                  color: isActive ? Colors.white : Colors.black,
+                  fontSize: 14,
+                )),
+              );
             }).toList();
           },
           items: widget.items

@@ -740,10 +740,13 @@ class _SpinnerBoxWidgetState extends State<_SpinnerBoxWidget> {
           iconEnabledColor: isActive ? Colors.white : Colors.black,
           selectedItemBuilder: (context) {
             return widget.items.map((e) {
-              return Text(e, style: TextStyle(
-                color: isActive ? Colors.white : Colors.black,
-                fontSize: 14,
-              ));
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Text(e, style: TextStyle(
+                  color: isActive ? Colors.white : Colors.black,
+                  fontSize: 14,
+                )),
+              );
             }).toList();
           },
           items: widget.items
